@@ -270,6 +270,8 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "analyzers",
+ "cluster",
+ "kube",
  "petgraph",
  "types",
 ]
@@ -620,6 +622,7 @@ dependencies = [
  "cluster",
  "colored",
  "engine",
+ "kube",
  "tabled",
  "tokio",
  "types",

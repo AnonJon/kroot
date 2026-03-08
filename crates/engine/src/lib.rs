@@ -1,6 +1,7 @@
 use analyzers::Analyzer;
+use kube::{Client, Config};
 use petgraph::graph::Graph;
-use types::{AnalysisContext, Diagnosis, PodDependencyKind, PodState};
+use types::{AnalysisContext, DependencyStatus, Diagnosis, PodDependencyKind, PodState};
 
 pub struct Engine {
     analyzers: Vec<Box<dyn Analyzer>>,
@@ -22,6 +23,21 @@ impl Engine {
 
         results
     }
+}
+
+pub async fn diagnose(client: Client) -> Result<Vec<Diagnosis>, Box<dyn std::error::Error>> {
+    let config = Config::infer().await?;
+    diagnose_in_namespace(client, &config.default_namespace).await
+}
+
+pub async fn diagnose_in_namespace(
+    client: Client,
+    namespace: &str,
+) -> Result<Vec<Diagnosis>, Box<dyn std::error::Error>> {
+    let ctx = cluster::collect_analysis_context_for_cluster_with_client(client, namespace).await?;
+    let analyzers = analyzers::registry::default_analyzers();
+    let engine = Engine::new(analyzers);
+    Ok(engine.run(&ctx))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -47,6 +63,11 @@ pub struct GraphSummary {
     pub node_count: usize,
     pub edge_count: usize,
     pub dependencies: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DependencyTrace {
+    pub chain: Vec<String>,
 }
 
 pub fn build_pod_dependency_graph(pod: &PodState) -> ClusterDependencyGraph {
@@ -106,13 +127,38 @@ pub fn summarize_graph(graph: &ClusterDependencyGraph) -> GraphSummary {
     }
 }
 
+pub fn trace_missing_dependencies(pod: &PodState) -> Vec<DependencyTrace> {
+    pod.dependencies
+        .iter()
+        .filter(|dep| dep.status == DependencyStatus::Missing)
+        .map(|dep| DependencyTrace {
+            chain: vec![
+                format!("Pod/{}/{}", pod.namespace, pod.name),
+                format!("{}/{}", dependency_kind_name(&dep.kind), dep.name),
+                format!("{} missing", dependency_kind_name(&dep.kind)),
+            ],
+        })
+        .collect()
+}
+
+fn dependency_kind_name(kind: &PodDependencyKind) -> &'static str {
+    match kind {
+        PodDependencyKind::Node => "Node",
+        PodDependencyKind::ServiceAccount => "ServiceAccount",
+        PodDependencyKind::Secret => "Secret",
+        PodDependencyKind::ConfigMap => "ConfigMap",
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use super::{build_pod_dependency_graph, summarize_graph, Engine};
     use analyzers::Analyzer;
     use types::{
-        AnalysisContext, ContainerLifecycleState, ContainerState, Diagnosis, PodDependency,
-        PodDependencyKind, PodSchedulingState, PodState, Severity,
+        AnalysisContext, AnalysisContextBuilder, ContainerLifecycleState, ContainerState,
+        DependencyStatus, Diagnosis, PodDependency, PodDependencyKind, PodSchedulingState,
+        PodState, Severity,
     };
 
     struct AlwaysAnalyzer;
@@ -120,6 +166,7 @@ mod tests {
         fn analyze(&self, _ctx: &AnalysisContext) -> Option<Diagnosis> {
             Some(Diagnosis {
                 severity: Severity::Info,
+                resource: "Test/resource".to_string(),
                 message: "test".to_string(),
                 root_cause: "test".to_string(),
                 evidence: vec!["ok".to_string()],
@@ -142,11 +189,13 @@ mod tests {
             phase: "Running".to_string(),
             restart_count: 0,
             node: "node-a".to_string(),
+            pod_labels: BTreeMap::new(),
             scheduling: PodSchedulingState {
                 unschedulable: false,
                 reason: None,
                 message: None,
             },
+            service_selectors: vec![],
             container_states: vec![
                 ContainerState {
                     name: "api".to_string(),
@@ -167,10 +216,12 @@ mod tests {
                 PodDependency {
                     kind: PodDependencyKind::Node,
                     name: "node-a".to_string(),
+                    status: DependencyStatus::Present,
                 },
                 PodDependency {
                     kind: PodDependencyKind::ConfigMap,
                     name: "app-config".to_string(),
+                    status: DependencyStatus::Present,
                 },
             ],
         };
@@ -194,19 +245,56 @@ mod tests {
             phase: "Running".to_string(),
             restart_count: 0,
             node: "node-a".to_string(),
+            pod_labels: BTreeMap::new(),
             scheduling: PodSchedulingState {
                 unschedulable: false,
                 reason: None,
                 message: None,
             },
+            service_selectors: vec![],
             container_states: vec![],
             dependencies: vec![],
         };
-        let ctx = AnalysisContext { pod };
+        let ctx = AnalysisContextBuilder::new().with_pods(vec![pod]).build();
         let engine = Engine::new(vec![Box::new(AlwaysAnalyzer), Box::new(NeverAnalyzer)]);
 
         let results = engine.run(&ctx);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].message, "test");
+    }
+
+    #[test]
+    fn traces_missing_dependency_chain() {
+        let pod = PodState {
+            name: "payments-api".to_string(),
+            namespace: "prod".to_string(),
+            phase: "Pending".to_string(),
+            restart_count: 0,
+            node: "unassigned".to_string(),
+            pod_labels: BTreeMap::new(),
+            scheduling: PodSchedulingState {
+                unschedulable: false,
+                reason: None,
+                message: None,
+            },
+            service_selectors: vec![],
+            container_states: vec![],
+            dependencies: vec![PodDependency {
+                kind: PodDependencyKind::Secret,
+                name: "db-password".to_string(),
+                status: DependencyStatus::Missing,
+            }],
+        };
+
+        let traces = super::trace_missing_dependencies(&pod);
+        assert_eq!(traces.len(), 1);
+        assert_eq!(
+            traces[0].chain,
+            vec![
+                "Pod/prod/payments-api".to_string(),
+                "Secret/db-password".to_string(),
+                "Secret missing".to_string()
+            ]
+        );
     }
 }
