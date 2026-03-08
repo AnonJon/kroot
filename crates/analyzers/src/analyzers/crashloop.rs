@@ -1,4 +1,4 @@
-use crate::Analyzer;
+use crate::{AnalysisInput, Analyzer, GraphAnalyzer};
 use std::collections::BTreeSet;
 use types::{AnalysisContext, ContainerLifecycleState, Diagnosis, Severity};
 
@@ -42,7 +42,10 @@ impl Analyzer for CrashLoopBackOffAnalyzer {
             return None;
         }
         let resource = if resources.len() == 1 {
-            resources.into_iter().next().unwrap_or_else(|| "Pods/*".to_string())
+            resources
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "Pods/*".to_string())
         } else {
             "Pods/*".to_string()
         };
@@ -51,9 +54,15 @@ impl Analyzer for CrashLoopBackOffAnalyzer {
             severity: Severity::Warning,
             resource,
             message: "CrashLoopBackOff detected".to_string(),
-            root_cause:
-                "Container repeatedly exits and Kubernetes is backing off restarts".to_string(),
+            root_cause: "Container repeatedly exits and Kubernetes is backing off restarts"
+                .to_string(),
             evidence,
         })
+    }
+}
+
+impl GraphAnalyzer for CrashLoopBackOffAnalyzer {
+    fn analyze_graph(&self, input: &AnalysisInput<'_>) -> Option<Diagnosis> {
+        self.analyze(input.context)
     }
 }

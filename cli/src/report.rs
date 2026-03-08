@@ -37,9 +37,10 @@ pub fn print_pod_report(
     print!("{report}");
 }
 
-pub fn print_cluster_report(diagnoses: Vec<Diagnosis>) {
+pub fn print_cluster_report(diagnoses: Vec<Diagnosis>, traces: Vec<engine::DependencyTrace>) {
     let diagnoses = normalize_diagnoses(diagnoses);
-    let report = render_cluster_report(&diagnoses);
+    let trace_chains = normalize_trace_chains(traces);
+    let report = render_cluster_report(&diagnoses, &trace_chains);
 
     println!("{}", "Diagnosis Report".bold().blue());
     println!("{}", "----------------".blue());
@@ -47,7 +48,11 @@ pub fn print_cluster_report(diagnoses: Vec<Diagnosis>) {
     print!("{report}");
 }
 
-pub fn render_pod_report(pod: &types::PodState, diagnoses: &[Diagnosis], trace_chains: &[String]) -> String {
+pub fn render_pod_report(
+    pod: &types::PodState,
+    diagnoses: &[Diagnosis],
+    trace_chains: &[String],
+) -> String {
     let mut out = String::new();
     out.push_str(&format!("Pod: {}\n", pod.name));
     out.push_str(&format!("Namespace: {}\n\n", pod.namespace));
@@ -127,23 +132,32 @@ pub fn render_pod_report(pod: &types::PodState, diagnoses: &[Diagnosis], trace_c
     out
 }
 
-pub fn render_cluster_report(diagnoses: &[Diagnosis]) -> String {
+pub fn render_cluster_report(diagnoses: &[Diagnosis], trace_chains: &[String]) -> String {
     let mut out = String::new();
     out.push_str(&format!("{} issues detected\n\n", diagnoses.len()));
 
     if diagnoses.is_empty() {
         out.push_str("No issues detected\n");
-        return out;
+    } else {
+        for diagnosis in diagnoses {
+            out.push_str(&format!(
+                "{} {} -> {}\n",
+                severity_label(diagnosis.severity),
+                diagnosis.resource,
+                diagnosis.message
+            ));
+            out.push_str(&format!("  Root cause: {}\n", diagnosis.root_cause));
+        }
     }
 
-    for diagnosis in diagnoses {
-        out.push_str(&format!(
-            "{} {} -> {}\n",
-            severity_label(diagnosis.severity),
-            diagnosis.resource,
-            diagnosis.message
-        ));
-        out.push_str(&format!("  Root cause: {}\n", diagnosis.root_cause));
+    out.push('\n');
+    out.push_str("Dependency Traces:\n");
+    if trace_chains.is_empty() {
+        out.push_str("  No missing dependency chains found\n");
+        return out;
+    }
+    for chain in trace_chains {
+        out.push_str(&format!("  {chain}\n"));
     }
     out
 }
@@ -185,13 +199,15 @@ pub fn normalize_diagnoses(diagnoses: Vec<Diagnosis>) -> Vec<Diagnosis> {
 
     let mut normalized = merged
         .into_iter()
-        .map(|((_rank, resource, message, root_cause), (severity, evidence_set))| Diagnosis {
-            severity,
-            resource,
-            message,
-            root_cause,
-            evidence: evidence_set.into_iter().collect(),
-        })
+        .map(
+            |((_rank, resource, message, root_cause), (severity, evidence_set))| Diagnosis {
+                severity,
+                resource,
+                message,
+                root_cause,
+                evidence: evidence_set.into_iter().collect(),
+            },
+        )
         .collect::<Vec<_>>();
 
     normalized.sort_by(|a, b| {
@@ -255,6 +271,7 @@ mod tests {
                 name: "db-password".to_string(),
                 status: DependencyStatus::Missing,
             }],
+            persistent_volume_claims: vec![],
         }
     }
 
@@ -301,11 +318,12 @@ mod tests {
             resource: "Pod/prod/payments-api".to_string(),
             message: "Missing Secret dependency detected".to_string(),
             root_cause: "Pod failing because secret db-password does not exist".to_string(),
-            evidence: vec!["Pod/prod/payments-api -> Secret/db-password -> Secret missing"
-                .to_string()],
+            evidence: vec![
+                "Pod/prod/payments-api -> Secret/db-password -> Secret missing".to_string(),
+            ],
         }];
-        let traces = vec!["Pod/prod/payments-api -> Secret/db-password -> Secret missing"
-            .to_string()];
+        let traces =
+            vec!["Pod/prod/payments-api -> Secret/db-password -> Secret missing".to_string()];
 
         let report = render_pod_report(&pod, &diagnoses, &traces);
         let expected = include_str!("../tests/fixtures/diagnosis_report.golden.txt");

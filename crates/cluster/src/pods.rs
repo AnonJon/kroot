@@ -5,14 +5,14 @@ use std::pin::Pin;
 use k8s_openapi::api::core::v1::{
     ConfigMap, ContainerState as K8sContainerState, Pod, Secret, Service,
 };
-use kube::{api::ListParams, Api, Client};
+use kube::{Api, Client, api::ListParams};
 use types::{
     AnalysisContextBuilder, ContainerLifecycleState, ContainerState, DependencyStatus,
     PodDependency, PodDependencyKind, PodSchedulingState, PodState, ServiceSelectorState,
 };
 
-use crate::collector::{CollectInput, Collector, ClusterResult};
 use crate::collector::CollectScope;
+use crate::collector::{ClusterResult, CollectInput, Collector};
 
 pub struct PodCollector;
 
@@ -125,6 +125,7 @@ pub async fn normalize_pod_state(client: &Client, pod: Pod) -> PodState {
         });
 
     let mut deps: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut persistent_volume_claims: BTreeSet<String> = BTreeSet::new();
     if node != "unassigned" {
         deps.insert(("Node".to_string(), node.clone()));
     }
@@ -141,6 +142,9 @@ pub async fn normalize_pod_state(client: &Client, pod: Pod) -> PodState {
                 }
                 if let Some(config_map) = volume.config_map.as_ref() {
                     deps.insert(("ConfigMap".to_string(), config_map.name.clone()));
+                }
+                if let Some(pvc) = volume.persistent_volume_claim.as_ref() {
+                    persistent_volume_claims.insert(pvc.claim_name.clone());
                 }
             }
         }
@@ -181,6 +185,7 @@ pub async fn normalize_pod_state(client: &Client, pod: Pod) -> PodState {
         service_selectors,
         container_states,
         dependencies,
+        persistent_volume_claims: persistent_volume_claims.into_iter().collect(),
     }
 }
 

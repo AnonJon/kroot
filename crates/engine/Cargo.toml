@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 analyzers = { path = "../analyzers" }
 cluster = { path = "../cluster" }
+graph = { path = "../graph" }
 kube = "3.0.1"
-petgraph = "0.8.3"
+serde = { version = "1.0", features = ["derive"] }
 types = { path = "../types" }

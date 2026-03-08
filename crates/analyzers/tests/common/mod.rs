@@ -20,5 +20,6 @@ pub fn base_pod() -> PodState {
         service_selectors: vec![],
         container_states: vec![],
         dependencies: vec![],
+        persistent_volume_claims: vec![],
     }
 }

@@ -3,10 +3,10 @@ use std::future::Future;
 use std::pin::Pin;
 
 use k8s_openapi::api::core::v1::{Pod, Service};
-use kube::{api::ListParams, Api, Client};
+use kube::{Api, Client, api::ListParams};
 use types::{AnalysisContextBuilder, ServiceState};
 
-use crate::collector::{CollectInput, Collector, ClusterResult};
+use crate::collector::{ClusterResult, CollectInput, Collector};
 
 pub struct ServiceCollector;
 
@@ -20,7 +20,8 @@ impl Collector for ServiceCollector {
         Box::pin(async move {
             let pods_api: Api<Pod> = Api::namespaced(client.clone(), &input.namespace);
             let namespace_pods = collect_namespace_pod_refs(&pods_api).await?;
-            let services = collect_service_states(client, &input.namespace, &namespace_pods).await?;
+            let services =
+                collect_service_states(client, &input.namespace, &namespace_pods).await?;
             Ok(builder.with_services(services))
         })
     }

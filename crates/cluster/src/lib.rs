@@ -1,6 +1,7 @@
 mod collector;
 mod context_loader;
 mod events;
+mod network_policies;
 mod nodes;
 mod pods;
 mod registry;
@@ -20,8 +21,8 @@ pub async fn collect_analysis_context_for_current_namespace(
     collect_analysis_context_for_pod(&config.default_namespace, pod_name).await
 }
 
-pub async fn collect_analysis_context_for_current_cluster_namespace(
-) -> Result<AnalysisContext, Box<dyn std::error::Error>> {
+pub async fn collect_analysis_context_for_current_cluster_namespace()
+-> Result<AnalysisContext, Box<dyn std::error::Error>> {
     let config = Config::infer().await?;
     collect_analysis_context_for_cluster(&config.default_namespace).await
 }

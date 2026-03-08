@@ -4,6 +4,7 @@ members = [
   "crates/engine",
   "crates/analyzers",
   "crates/cluster",
+  "crates/graph",
   "crates/types",
 ]
 resolver = "2"

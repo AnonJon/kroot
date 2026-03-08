@@ -2,10 +2,11 @@ mod common;
 
 use analyzers::{
     Analyzer, FailedLivenessProbeAnalyzer, FailedMountPvcAnalyzer, FailedReadinessProbeAnalyzer,
-    NodeNotReadyAnalyzer,
+    NetworkPolicyBlockingAnalyzer, NodeNotReadyAnalyzer,
 };
 use types::{
-    AnalysisContextBuilder, EventState, NodeState, PersistentVolumeClaimState, PersistentVolumeState,
+    AnalysisContextBuilder, EventState, NetworkPolicyState, NodeState, PersistentVolumeClaimState,
+    PersistentVolumeState,
 };
 
 #[test]
@@ -91,6 +92,27 @@ fn detects_failed_mount_pvc() {
         .with_events(vec![event])
         .with_persistent_volume_claims(vec![pvc])
         .with_persistent_volumes(vec![pv])
+        .build();
+    assert!(analyzer.analyze(&ctx).is_some());
+}
+
+#[test]
+fn detects_network_policy_blocking() {
+    let pod = common::base_pod();
+    let mut selector = std::collections::BTreeMap::new();
+    selector.insert("app".to_string(), "payments-api".to_string());
+    let policy = NetworkPolicyState {
+        name: "deny-all".to_string(),
+        namespace: "prod".to_string(),
+        pod_selector: selector,
+        policy_types: vec!["Ingress".to_string(), "Egress".to_string()],
+        has_ingress_rules: false,
+        has_egress_rules: false,
+    };
+    let analyzer = NetworkPolicyBlockingAnalyzer;
+    let ctx = AnalysisContextBuilder::new()
+        .with_pods(vec![pod])
+        .with_network_policies(vec![policy])
         .build();
     assert!(analyzer.analyze(&ctx).is_some());
 }

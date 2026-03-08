@@ -1,4 +1,4 @@
-use crate::Analyzer;
+use crate::{AnalysisInput, Analyzer, GraphAnalyzer};
 use std::collections::BTreeSet;
 use types::{AnalysisContext, Diagnosis, Severity};
 
@@ -28,7 +28,10 @@ impl Analyzer for FailedReadinessProbeAnalyzer {
             return None;
         }
         let resource = if resources.len() == 1 {
-            resources.into_iter().next().unwrap_or_else(|| "Pods/*".to_string())
+            resources
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "Pods/*".to_string())
         } else {
             "Pods/*".to_string()
         };
@@ -40,5 +43,11 @@ impl Analyzer for FailedReadinessProbeAnalyzer {
             root_cause: "Pod is running but failing readiness checks".to_string(),
             evidence,
         })
+    }
+}
+
+impl GraphAnalyzer for FailedReadinessProbeAnalyzer {
+    fn analyze_graph(&self, input: &AnalysisInput<'_>) -> Option<Diagnosis> {
+        self.analyze(input.context)
     }
 }

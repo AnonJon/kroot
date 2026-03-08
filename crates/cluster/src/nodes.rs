@@ -3,11 +3,11 @@ use std::pin::Pin;
 
 use k8s_openapi::api::core::v1::Node;
 use k8s_openapi::api::core::v1::Pod;
-use kube::{api::ListParams, Api, Client};
+use kube::{Api, Client, api::ListParams};
 use std::collections::BTreeSet;
 use types::{AnalysisContextBuilder, NodeState};
 
-use crate::collector::{CollectInput, CollectScope, Collector, ClusterResult};
+use crate::collector::{ClusterResult, CollectInput, CollectScope, Collector};
 use crate::pods::fetch_target_pod;
 
 pub struct NodeCollector;
@@ -23,11 +23,12 @@ impl Collector for NodeCollector {
             let node_names = match &input.scope {
                 CollectScope::Pod(pod_name) => {
                     let pod = fetch_target_pod(client, &input.namespace, pod_name).await?;
-                    vec![pod
-                        .spec
-                        .as_ref()
-                        .and_then(|spec| spec.node_name.clone())
-                        .unwrap_or_else(|| "unassigned".to_string())]
+                    vec![
+                        pod.spec
+                            .as_ref()
+                            .and_then(|spec| spec.node_name.clone())
+                            .unwrap_or_else(|| "unassigned".to_string()),
+                    ]
                 }
                 CollectScope::Cluster => {
                     list_namespace_node_names(client, &input.namespace).await?
@@ -106,5 +107,9 @@ fn normalize_node_state(node: Node) -> NodeState {
         reasons.push("Node is not Ready".to_string());
     }
 
-    NodeState { name, ready, reasons }
+    NodeState {
+        name,
+        ready,
+        reasons,
+    }
 }

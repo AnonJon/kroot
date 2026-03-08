@@ -18,6 +18,7 @@ cargo run -p kdocter -- diagnose cluster
 
 - `cli`: CLI binary (`kdocter`)
 - `crates/cluster`: Kubernetes client and cluster data access
+- `crates/graph`: dependency graph construction over normalized cluster state
 - `crates/engine`: orchestration and diagnosis pipeline
 - `crates/analyzers`: RCA analyzers
 - `crates/types`: shared domain types

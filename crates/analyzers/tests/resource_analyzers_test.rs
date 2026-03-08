@@ -1,14 +1,27 @@
 mod common;
 
 use analyzers::{
-    Analyzer, ImagePullBackOffAnalyzer, MissingConfigMapAnalyzer, MissingSecretAnalyzer,
-    OOMKilledAnalyzer, ServiceSelectorMismatchAnalyzer, UnschedulableAnalyzer,
+    AnalysisInput, Analyzer, GraphAnalyzer, ImagePullBackOffAnalyzer, MissingConfigMapAnalyzer,
+    MissingSecretAnalyzer, OOMKilledAnalyzer, ServiceSelectorMismatchAnalyzer,
+    UnschedulableAnalyzer,
 };
+use graph::DependencyGraphBuilder;
 use std::collections::BTreeMap;
 use types::{
-    AnalysisContextBuilder, ContainerLifecycleState, ContainerState, DependencyStatus,
-    PodDependency, PodDependencyKind, ServiceSelectorState,
+    AnalysisContext, AnalysisContextBuilder, ContainerLifecycleState, ContainerState,
+    DependencyStatus, PodDependency, PodDependencyKind, ServiceState,
 };
+
+fn run_graph_analyzer(
+    analyzer: &dyn GraphAnalyzer,
+    ctx: &AnalysisContext,
+) -> Option<types::Diagnosis> {
+    let graph = DependencyGraphBuilder::from_context(ctx);
+    analyzer.analyze_graph(&AnalysisInput {
+        context: ctx,
+        graph: &graph,
+    })
+}
 
 #[test]
 fn detects_image_pull_backoff() {
@@ -64,7 +77,7 @@ fn detects_missing_secret() {
     });
     let analyzer = MissingSecretAnalyzer;
     let ctx = AnalysisContextBuilder::new().with_pods(vec![pod]).build();
-    assert!(analyzer.analyze(&ctx).is_some());
+    assert!(run_graph_analyzer(&analyzer, &ctx).is_some());
 }
 
 #[test]
@@ -77,21 +90,43 @@ fn detects_missing_configmap() {
     });
     let analyzer = MissingConfigMapAnalyzer;
     let ctx = AnalysisContextBuilder::new().with_pods(vec![pod]).build();
-    assert!(analyzer.analyze(&ctx).is_some());
+    assert!(run_graph_analyzer(&analyzer, &ctx).is_some());
 }
 
 #[test]
 fn detects_service_selector_mismatch() {
-    let mut pod = common::base_pod();
+    let pod = common::base_pod();
     let mut selector = BTreeMap::new();
     selector.insert("app".to_string(), "payments".to_string());
-    pod.service_selectors.push(ServiceSelectorState {
-        service_name: "payments".to_string(),
+    let service = ServiceState {
+        name: "payments".to_string(),
+        namespace: "prod".to_string(),
         selector,
-        key_overlap_with_pod: true,
-        matches_pod: false,
-    });
+        matched_pods: vec![],
+    };
     let analyzer = ServiceSelectorMismatchAnalyzer;
-    let ctx = AnalysisContextBuilder::new().with_pods(vec![pod]).build();
-    assert!(analyzer.analyze(&ctx).is_some());
+    let ctx = AnalysisContextBuilder::new()
+        .with_pods(vec![pod])
+        .with_services(vec![service])
+        .build();
+    assert!(run_graph_analyzer(&analyzer, &ctx).is_some());
+}
+
+#[test]
+fn does_not_flag_service_with_matching_pods() {
+    let pod = common::base_pod();
+    let mut selector = BTreeMap::new();
+    selector.insert("app".to_string(), "payments-api".to_string());
+    let service = ServiceState {
+        name: "payments".to_string(),
+        namespace: "prod".to_string(),
+        selector,
+        matched_pods: vec!["payments-api".to_string()],
+    };
+    let analyzer = ServiceSelectorMismatchAnalyzer;
+    let ctx = AnalysisContextBuilder::new()
+        .with_pods(vec![pod])
+        .with_services(vec![service])
+        .build();
+    assert!(run_graph_analyzer(&analyzer, &ctx).is_none());
 }

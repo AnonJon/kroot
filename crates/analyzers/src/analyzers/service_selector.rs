@@ -1,30 +1,39 @@
-use crate::Analyzer;
+use crate::{AnalysisInput, GraphAnalyzer};
+use graph::{Relation, ResourceId};
 use std::collections::BTreeSet;
-use types::{AnalysisContext, Diagnosis, Severity};
+use types::{Diagnosis, Severity};
 
 pub struct ServiceSelectorMismatchAnalyzer;
 
-impl Analyzer for ServiceSelectorMismatchAnalyzer {
-    fn analyze(&self, ctx: &AnalysisContext) -> Option<Diagnosis> {
+impl GraphAnalyzer for ServiceSelectorMismatchAnalyzer {
+    fn analyze_graph(&self, input: &AnalysisInput<'_>) -> Option<Diagnosis> {
         let mut evidence = Vec::new();
         let mut resources = BTreeSet::new();
-        for pod in &ctx.pods {
-            for svc in &pod.service_selectors {
-                if !(svc.key_overlap_with_pod && !svc.matches_pod) {
-                    continue;
-                }
-                resources.insert(format!("Service/{}/{}", pod.namespace, svc.service_name));
-                let selector = svc
-                    .selector
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                evidence.push(format!(
-                    "pod={}/{} service={} selector=[{}] pod_labels={:?}",
-                    pod.namespace, pod.name, svc.service_name, selector, pod.pod_labels
-                ));
+
+        for service in &input.context.services {
+            if service.selector.is_empty() {
+                continue;
             }
+
+            let service_id = ResourceId::service(&service.namespace, &service.name);
+            let routed_pods = input
+                .graph
+                .related_resources(&service_id, Relation::RoutesToPod);
+            if !routed_pods.is_empty() {
+                continue;
+            }
+
+            resources.insert(format!("Service/{}/{}", service.namespace, service.name));
+            let selector = service
+                .selector
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            evidence.push(format!(
+                "service={}/{} selector=[{}] has no matched pods",
+                service.namespace, service.name, selector
+            ));
         }
 
         if evidence.is_empty() {
@@ -43,7 +52,7 @@ impl Analyzer for ServiceSelectorMismatchAnalyzer {
             severity: Severity::Warning,
             resource,
             message: "Service selector mismatch detected".to_string(),
-            root_cause: "Service selector does not match pod labels".to_string(),
+            root_cause: "Service selector does not match any pod labels".to_string(),
             evidence,
         })
     }

@@ -1,6 +1,6 @@
 use crate::{
-    AnalysisContext, EventState, NodeState, PersistentVolumeClaimState, PersistentVolumeState,
-    PodState, ServiceState,
+    AnalysisContext, EventState, NetworkPolicyState, NodeState, PersistentVolumeClaimState,
+    PersistentVolumeState, PodState, ServiceState,
 };
 
 pub struct AnalysisContextBuilder {
@@ -8,6 +8,7 @@ pub struct AnalysisContextBuilder {
     services: Vec<ServiceState>,
     nodes: Vec<NodeState>,
     events: Vec<EventState>,
+    network_policies: Vec<NetworkPolicyState>,
     persistent_volume_claims: Vec<PersistentVolumeClaimState>,
     persistent_volumes: Vec<PersistentVolumeState>,
 }
@@ -19,6 +20,7 @@ impl AnalysisContextBuilder {
             services: Vec::new(),
             nodes: Vec::new(),
             events: Vec::new(),
+            network_policies: Vec::new(),
             persistent_volume_claims: Vec::new(),
             persistent_volumes: Vec::new(),
         }
@@ -44,6 +46,11 @@ impl AnalysisContextBuilder {
         self
     }
 
+    pub fn with_network_policies(mut self, network_policies: Vec<NetworkPolicyState>) -> Self {
+        self.network_policies = network_policies;
+        self
+    }
+
     pub fn with_persistent_volume_claims(
         mut self,
         persistent_volume_claims: Vec<PersistentVolumeClaimState>,
@@ -66,6 +73,7 @@ impl AnalysisContextBuilder {
             services: self.services,
             nodes: self.nodes,
             events: self.events,
+            network_policies: self.network_policies,
             persistent_volume_claims: self.persistent_volume_claims,
             persistent_volumes: self.persistent_volumes,
         }
@@ -109,6 +117,7 @@ mod tests {
                 last_termination_exit_code: None,
             }],
             dependencies: vec![],
+            persistent_volume_claims: vec![],
         }
     }
 
@@ -119,6 +128,7 @@ mod tests {
         assert!(ctx.services.is_empty());
         assert!(ctx.nodes.is_empty());
         assert!(ctx.events.is_empty());
+        assert!(ctx.network_policies.is_empty());
         assert!(ctx.persistent_volume_claims.is_empty());
         assert!(ctx.persistent_volumes.is_empty());
     }
@@ -126,9 +136,7 @@ mod tests {
     #[test]
     fn builder_adds_pods() {
         let pods = vec![mock_pod()];
-        let ctx = AnalysisContextBuilder::new()
-            .with_pods(pods)
-            .build();
+        let ctx = AnalysisContextBuilder::new().with_pods(pods).build();
         assert_eq!(ctx.pods.len(), 1);
     }
 

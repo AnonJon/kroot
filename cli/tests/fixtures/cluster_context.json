@@ -1,0 +1,80 @@
+{
+  "pods": [
+    {
+      "name": "payments-api",
+      "namespace": "prod",
+      "phase": "Running",
+      "restart_count": 0,
+      "node": "worker-1",
+      "pod_labels": {
+        "app": "payments-api"
+      },
+      "scheduling": {
+        "unschedulable": false,
+        "reason": null,
+        "message": null
+      },
+      "service_selectors": [],
+      "container_states": [],
+      "dependencies": [
+        {
+          "kind": "Secret",
+          "name": "db-password",
+          "status": "Missing"
+        }
+      ],
+      "persistent_volume_claims": [
+        "data-volume"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "payments",
+      "namespace": "prod",
+      "selector": {
+        "app": "payments"
+      },
+      "matched_pods": []
+    }
+  ],
+  "nodes": [
+    {
+      "name": "worker-1",
+      "ready": true,
+      "reasons": []
+    }
+  ],
+  "events": [],
+  "network_policies": [
+    {
+      "name": "deny-all",
+      "namespace": "prod",
+      "pod_selector": {
+        "app": "payments-api"
+      },
+      "policy_types": [
+        "Ingress",
+        "Egress"
+      ],
+      "has_ingress_rules": false,
+      "has_egress_rules": false
+    }
+  ],
+  "persistent_volume_claims": [
+    {
+      "name": "data-volume",
+      "namespace": "prod",
+      "exists": true,
+      "phase": "Bound",
+      "volume_name": "pv-data"
+    }
+  ],
+  "persistent_volumes": [
+    {
+      "name": "pv-data",
+      "exists": true,
+      "phase": "Bound"
+    }
+  ]
+}

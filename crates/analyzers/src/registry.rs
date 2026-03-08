@@ -1,12 +1,16 @@
 use crate::analyzers::{
     CrashLoopBackOffAnalyzer, FailedLivenessProbeAnalyzer, FailedMountPvcAnalyzer,
     FailedReadinessProbeAnalyzer, ImagePullBackOffAnalyzer, MissingConfigMapAnalyzer,
-    MissingSecretAnalyzer, NodeNotReadyAnalyzer, OOMKilledAnalyzer,
+    MissingSecretAnalyzer, NetworkPolicyBlockingAnalyzer, NodeNotReadyAnalyzer, OOMKilledAnalyzer,
     ServiceSelectorMismatchAnalyzer, UnschedulableAnalyzer,
 };
-use crate::Analyzer;
+use crate::{Analyzer, GraphAnalyzer};
 
-pub fn default_collectors() -> Vec<Box<dyn Analyzer>> {
+pub fn default_analyzers() -> Vec<Box<dyn Analyzer>> {
+    vec![]
+}
+
+pub fn default_graph_analyzers() -> Vec<Box<dyn GraphAnalyzer>> {
     vec![
         Box::new(CrashLoopBackOffAnalyzer),
         Box::new(ImagePullBackOffAnalyzer),
@@ -16,12 +20,9 @@ pub fn default_collectors() -> Vec<Box<dyn Analyzer>> {
         Box::new(FailedReadinessProbeAnalyzer),
         Box::new(FailedLivenessProbeAnalyzer),
         Box::new(FailedMountPvcAnalyzer),
+        Box::new(NetworkPolicyBlockingAnalyzer),
         Box::new(MissingSecretAnalyzer),
         Box::new(MissingConfigMapAnalyzer),
         Box::new(ServiceSelectorMismatchAnalyzer),
     ]
-}
-
-pub fn default_analyzers() -> Vec<Box<dyn Analyzer>> {
-    default_collectors()
 }

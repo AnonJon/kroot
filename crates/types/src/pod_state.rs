@@ -1,7 +1,8 @@
 use crate::{ContainerState, ServiceSelectorState};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodState {
     pub name: String,
     pub namespace: String,
@@ -13,23 +14,24 @@ pub struct PodState {
     pub service_selectors: Vec<ServiceSelectorState>,
     pub container_states: Vec<ContainerState>,
     pub dependencies: Vec<PodDependency>,
+    pub persistent_volume_claims: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodSchedulingState {
     pub unschedulable: bool,
     pub reason: Option<String>,
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PodDependency {
     pub kind: PodDependencyKind,
     pub name: String,
     pub status: DependencyStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PodDependencyKind {
     Node,
     ServiceAccount,
@@ -37,7 +39,7 @@ pub enum PodDependencyKind {
     ConfigMap,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DependencyStatus {
     Present,
     Missing,

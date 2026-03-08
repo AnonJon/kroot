@@ -3,10 +3,10 @@ use std::future::Future;
 use std::pin::Pin;
 
 use k8s_openapi::api::core::v1::{PersistentVolume, PersistentVolumeClaim, Pod};
-use kube::{api::ListParams, Api, Client};
+use kube::{Api, Client, api::ListParams};
 use types::{AnalysisContextBuilder, PersistentVolumeClaimState, PersistentVolumeState};
 
-use crate::collector::{CollectInput, CollectScope, Collector, ClusterResult};
+use crate::collector::{ClusterResult, CollectInput, CollectScope, Collector};
 use crate::pods::fetch_target_pod;
 
 pub struct StorageCollector;

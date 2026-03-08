@@ -1,4 +1,4 @@
-use crate::Analyzer;
+use crate::{AnalysisInput, Analyzer, GraphAnalyzer};
 use std::collections::BTreeSet;
 use types::{AnalysisContext, ContainerLifecycleState, Diagnosis, Severity};
 
@@ -17,9 +17,9 @@ impl Analyzer for OOMKilledAnalyzer {
                     }
                     _ => false,
                 };
-                let last_terminated_oom =
-                    container.last_termination_reason.as_deref() == Some("OOMKilled")
-                        || container.last_termination_exit_code == Some(137);
+                let last_terminated_oom = container.last_termination_reason.as_deref()
+                    == Some("OOMKilled")
+                    || container.last_termination_exit_code == Some(137);
 
                 if !(terminated_oom || last_terminated_oom) {
                     continue;
@@ -41,7 +41,10 @@ impl Analyzer for OOMKilledAnalyzer {
             return None;
         }
         let resource = if resources.len() == 1 {
-            resources.into_iter().next().unwrap_or_else(|| "Pods/*".to_string())
+            resources
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "Pods/*".to_string())
         } else {
             "Pods/*".to_string()
         };
@@ -53,5 +56,11 @@ impl Analyzer for OOMKilledAnalyzer {
             root_cause: "Container exceeded memory limit and was killed".to_string(),
             evidence,
         })
+    }
+}
+
+impl GraphAnalyzer for OOMKilledAnalyzer {
+    fn analyze_graph(&self, input: &AnalysisInput<'_>) -> Option<Diagnosis> {
+        self.analyze(input.context)
     }
 }

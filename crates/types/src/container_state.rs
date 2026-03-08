@@ -1,4 +1,6 @@
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerState {
     pub name: String,
     pub restart_count: u32,
@@ -7,7 +9,7 @@ pub struct ContainerState {
     pub last_termination_exit_code: Option<i32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ContainerLifecycleState {
     Waiting {
         reason: Option<String>,

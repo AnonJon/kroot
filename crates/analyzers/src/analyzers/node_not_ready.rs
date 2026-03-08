@@ -1,4 +1,4 @@
-use crate::Analyzer;
+use crate::{AnalysisInput, Analyzer, GraphAnalyzer};
 use std::collections::BTreeSet;
 use types::{AnalysisContext, Diagnosis, Severity};
 
@@ -45,5 +45,11 @@ impl Analyzer for NodeNotReadyAnalyzer {
             root_cause: "Node is unhealthy or disconnected from control plane".to_string(),
             evidence,
         })
+    }
+}
+
+impl GraphAnalyzer for NodeNotReadyAnalyzer {
+    fn analyze_graph(&self, input: &AnalysisInput<'_>) -> Option<Diagnosis> {
+        self.analyze(input.context)
     }
 }
