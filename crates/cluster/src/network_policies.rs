@@ -72,8 +72,32 @@ fn normalize_network_policy_state(policy: NetworkPolicy) -> Option<NetworkPolicy
         .pod_selector
         .and_then(|selector| selector.match_labels)
         .unwrap_or_default();
-    let has_ingress_rules = spec.ingress.as_ref().is_some_and(|rules| !rules.is_empty());
-    let has_egress_rules = spec.egress.as_ref().is_some_and(|rules| !rules.is_empty());
+    let ingress_rule_count = spec.ingress.as_ref().map_or(0, |rules| rules.len());
+    let egress_rule_count = spec.egress.as_ref().map_or(0, |rules| rules.len());
+    let ingress_peer_count = spec.ingress.as_ref().map_or(0, |rules| {
+        rules
+            .iter()
+            .map(|rule| rule.from.as_ref().map_or(0, |from| from.len()))
+            .sum()
+    });
+    let egress_peer_count = spec.egress.as_ref().map_or(0, |rules| {
+        rules
+            .iter()
+            .map(|rule| rule.to.as_ref().map_or(0, |to| to.len()))
+            .sum()
+    });
+    let ingress_port_count = spec.ingress.as_ref().map_or(0, |rules| {
+        rules
+            .iter()
+            .map(|rule| rule.ports.as_ref().map_or(0, |ports| ports.len()))
+            .sum()
+    });
+    let egress_port_count = spec.egress.as_ref().map_or(0, |rules| {
+        rules
+            .iter()
+            .map(|rule| rule.ports.as_ref().map_or(0, |ports| ports.len()))
+            .sum()
+    });
     let policy_types = spec.policy_types.unwrap_or_else(|| {
         let mut types = vec!["Ingress".to_string()];
         if spec.egress.is_some() {
@@ -81,14 +105,23 @@ fn normalize_network_policy_state(policy: NetworkPolicy) -> Option<NetworkPolicy
         }
         types
     });
+    let default_deny_ingress =
+        policy_types.iter().any(|t| t == "Ingress") && ingress_rule_count == 0;
+    let default_deny_egress = policy_types.iter().any(|t| t == "Egress") && egress_rule_count == 0;
 
     Some(NetworkPolicyState {
         name,
         namespace,
         pod_selector,
         policy_types,
-        has_ingress_rules,
-        has_egress_rules,
+        ingress_rule_count,
+        egress_rule_count,
+        ingress_peer_count,
+        egress_peer_count,
+        ingress_port_count,
+        egress_port_count,
+        default_deny_ingress,
+        default_deny_egress,
     })
 }
 
@@ -96,7 +129,9 @@ fn selector_matches_labels(
     selector: &std::collections::BTreeMap<String, String>,
     labels: &std::collections::BTreeMap<String, String>,
 ) -> bool {
-    selector.iter().all(|(key, value)| labels.get(key) == Some(value))
+    selector
+        .iter()
+        .all(|(key, value)| labels.get(key) == Some(value))
 }
 
 #[allow(dead_code)]
@@ -104,14 +139,11 @@ fn full_selector_matches_labels(
     selector: &LabelSelector,
     labels: &std::collections::BTreeMap<String, String>,
 ) -> bool {
-    let matches_labels = selector
-        .match_labels
-        .as_ref()
-        .is_none_or(|match_labels| {
-            match_labels
-                .iter()
-                .all(|(key, value)| labels.get(key) == Some(value))
-        });
+    let matches_labels = selector.match_labels.as_ref().is_none_or(|match_labels| {
+        match_labels
+            .iter()
+            .all(|(key, value)| labels.get(key) == Some(value))
+    });
     let matches_expressions = selector
         .match_expressions
         .as_ref()
@@ -126,8 +158,18 @@ fn expression_matches(
 ) -> bool {
     let value = labels.get(&requirement.key);
     match requirement.operator.as_str() {
-        "In" => value.is_some_and(|current| requirement.values.as_ref().is_some_and(|v| v.contains(current))),
-        "NotIn" => value.is_none_or(|current| requirement.values.as_ref().is_some_and(|v| !v.contains(current))),
+        "In" => value.is_some_and(|current| {
+            requirement
+                .values
+                .as_ref()
+                .is_some_and(|v| v.contains(current))
+        }),
+        "NotIn" => value.is_none_or(|current| {
+            requirement
+                .values
+                .as_ref()
+                .is_some_and(|v| !v.contains(current))
+        }),
         "Exists" => value.is_some(),
         "DoesNotExist" => value.is_none(),
         _ => false,

@@ -50,6 +50,7 @@ impl GraphAnalyzer for ServiceSelectorMismatchAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Warning,
+            confidence: 0.90,
             resource,
             message: "Service selector mismatch detected".to_string(),
             root_cause: "Service selector does not match any pod labels".to_string(),

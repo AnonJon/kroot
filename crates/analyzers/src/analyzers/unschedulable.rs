@@ -37,6 +37,7 @@ impl Analyzer for UnschedulableAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Warning,
+            confidence: 0.90,
             resource,
             message: "Pod is unschedulable".to_string(),
             root_cause: "Scheduler could not place pod on any node".to_string(),

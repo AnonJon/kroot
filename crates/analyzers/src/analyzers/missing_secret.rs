@@ -68,6 +68,7 @@ impl GraphAnalyzer for MissingSecretAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.98,
             resource,
             message: "Missing Secret dependency detected".to_string(),
             root_cause,

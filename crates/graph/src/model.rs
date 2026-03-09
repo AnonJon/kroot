@@ -6,12 +6,16 @@ use types::DependencyStatus;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ResourceKind {
+    Deployment,
+    ReplicaSet,
     Pod,
+    Ingress,
     Service,
     Node,
     Secret,
     ConfigMap,
     PersistentVolumeClaim,
+    PersistentVolume,
     NetworkPolicy,
 }
 
@@ -23,9 +27,33 @@ pub struct ResourceId {
 }
 
 impl ResourceId {
+    pub fn deployment(namespace: &str, name: &str) -> Self {
+        Self {
+            kind: ResourceKind::Deployment,
+            namespace: Some(namespace.to_string()),
+            name: name.to_string(),
+        }
+    }
+
+    pub fn replica_set(namespace: &str, name: &str) -> Self {
+        Self {
+            kind: ResourceKind::ReplicaSet,
+            namespace: Some(namespace.to_string()),
+            name: name.to_string(),
+        }
+    }
+
     pub fn pod(namespace: &str, name: &str) -> Self {
         Self {
             kind: ResourceKind::Pod,
+            namespace: Some(namespace.to_string()),
+            name: name.to_string(),
+        }
+    }
+
+    pub fn ingress(namespace: &str, name: &str) -> Self {
+        Self {
+            kind: ResourceKind::Ingress,
             namespace: Some(namespace.to_string()),
             name: name.to_string(),
         }
@@ -71,6 +99,14 @@ impl ResourceId {
         }
     }
 
+    pub fn persistent_volume(name: &str) -> Self {
+        Self {
+            kind: ResourceKind::PersistentVolume,
+            namespace: None,
+            name: name.to_string(),
+        }
+    }
+
     pub fn network_policy(namespace: &str, name: &str) -> Self {
         Self {
             kind: ResourceKind::NetworkPolicy,
@@ -82,10 +118,14 @@ impl ResourceId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Relation {
+    OwnsReplicaSet,
+    OwnsPod,
     RoutesToPod,
+    RoutesToService,
     UsesSecret,
     UsesConfigMap,
     MountsPersistentVolumeClaim,
+    BindsPersistentVolume,
     ScheduledOnNode,
     AppliesToPod,
 }

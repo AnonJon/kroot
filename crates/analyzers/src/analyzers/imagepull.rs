@@ -55,6 +55,7 @@ impl Analyzer for ImagePullBackOffAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.97,
             resource,
             message: "Image pull failure detected".to_string(),
             root_cause: "Container image could not be pulled from registry".to_string(),

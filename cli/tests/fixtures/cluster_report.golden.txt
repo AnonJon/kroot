@@ -5,10 +5,10 @@ Diagnosis Report
 
 CRITICAL Pod/prod/payments-api -> Missing Secret dependency detected
   Root cause: Pod failing because secret db-password does not exist
-WARNING Pod/prod/payments-api -> NetworkPolicy blocking traffic
-  Root cause: NetworkPolicy rules deny expected ingress/egress for selected pods
 WARNING Service/prod/payments -> Service selector mismatch detected
   Root cause: Service selector does not match any pod labels
+WARNING Pod/prod/payments-api -> NetworkPolicy blocking traffic
+  Root cause: NetworkPolicy rules deny expected ingress/egress for selected pods
 
 Dependency Traces:
   Pod/prod/payments-api -> Secret/prod/db-password -> Secret missing (source: pod.dependencies)

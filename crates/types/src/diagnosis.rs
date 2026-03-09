@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diagnosis {
     pub severity: Severity,
+    pub confidence: f32,
     pub resource: String,
     pub message: String,
     pub root_cause: String,

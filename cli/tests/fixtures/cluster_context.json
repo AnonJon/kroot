@@ -5,6 +5,8 @@
       "namespace": "prod",
       "phase": "Running",
       "restart_count": 0,
+      "controller_kind": "ReplicaSet",
+      "controller_name": "payments-api-rs",
       "node": "worker-1",
       "pod_labels": {
         "app": "payments-api"
@@ -46,6 +48,34 @@
     }
   ],
   "events": [],
+  "deployments": [
+    {
+      "name": "payments-api",
+      "namespace": "prod",
+      "selector": {
+        "app": "payments-api"
+      }
+    }
+  ],
+  "replica_sets": [
+    {
+      "name": "payments-api-rs",
+      "namespace": "prod",
+      "selector": {
+        "app": "payments-api"
+      },
+      "owner_deployment": "payments-api"
+    }
+  ],
+  "ingresses": [
+    {
+      "name": "payments-ingress",
+      "namespace": "prod",
+      "backend_services": [
+        "payments"
+      ]
+    }
+  ],
   "network_policies": [
     {
       "name": "deny-all",
@@ -57,8 +87,14 @@
         "Ingress",
         "Egress"
       ],
-      "has_ingress_rules": false,
-      "has_egress_rules": false
+      "ingress_rule_count": 0,
+      "egress_rule_count": 0,
+      "ingress_peer_count": 0,
+      "egress_peer_count": 0,
+      "ingress_port_count": 0,
+      "egress_port_count": 0,
+      "default_deny_ingress": true,
+      "default_deny_egress": true
     }
   ],
   "persistent_volume_claims": [

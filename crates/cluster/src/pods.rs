@@ -66,6 +66,17 @@ pub async fn normalize_pod_state(client: &Client, pod: Pod) -> PodState {
         .namespace
         .clone()
         .unwrap_or_else(|| "default".to_string());
+    let (controller_kind, controller_name) = pod
+        .metadata
+        .owner_references
+        .as_ref()
+        .and_then(|owners| {
+            owners
+                .iter()
+                .find(|owner| owner.controller == Some(true))
+                .map(|owner| (Some(owner.kind.clone()), Some(owner.name.clone())))
+        })
+        .unwrap_or((None, None));
     let pod_labels = pod.metadata.labels.clone().unwrap_or_default();
     let phase = pod
         .status
@@ -179,6 +190,8 @@ pub async fn normalize_pod_state(client: &Client, pod: Pod) -> PodState {
         namespace,
         phase,
         restart_count,
+        controller_kind,
+        controller_name,
         node,
         pod_labels,
         scheduling,

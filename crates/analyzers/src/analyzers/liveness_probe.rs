@@ -38,6 +38,7 @@ impl Analyzer for FailedLivenessProbeAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Warning,
+            confidence: 0.90,
             resource,
             message: "Liveness probe failures detected".to_string(),
             root_cause: "Container is being restarted by failing liveness checks".to_string(),

@@ -71,6 +71,16 @@ pub async fn diagnose_report(client: Client) -> Result<DiagnosisRun, Box<dyn std
     diagnose_report_in_namespace(client, &config.default_namespace).await
 }
 
+pub async fn diagnose_report_all_namespaces(
+    client: Client,
+) -> Result<DiagnosisRun, Box<dyn std::error::Error>> {
+    let ctx = cluster::collect_analysis_context_for_all_namespaces_with_client(client).await?;
+    let analyzers = analyzers::registry::default_analyzers();
+    let graph_analyzers = analyzers::registry::default_graph_analyzers();
+    let engine = Engine::new(analyzers, graph_analyzers);
+    Ok(engine.run_report(&ctx))
+}
+
 pub async fn diagnose_in_namespace(
     client: Client,
     namespace: &str,
@@ -78,6 +88,12 @@ pub async fn diagnose_in_namespace(
     Ok(diagnose_report_in_namespace(client, namespace)
         .await?
         .diagnoses)
+}
+
+pub async fn diagnose_all_namespaces(
+    client: Client,
+) -> Result<Vec<Diagnosis>, Box<dyn std::error::Error>> {
+    Ok(diagnose_report_all_namespaces(client).await?.diagnoses)
 }
 
 pub async fn diagnose_report_in_namespace(
@@ -101,6 +117,7 @@ pub fn trace_missing_dependency_chains(graph: &DependencyGraph) -> Vec<Dependenc
         Relation::UsesSecret,
         Relation::UsesConfigMap,
         Relation::MountsPersistentVolumeClaim,
+        Relation::BindsPersistentVolume,
     ] {
         for (from, to, edge) in graph.relations_with_status(relation, DependencyStatus::Missing) {
             let mut tail = format!("{} missing", resource_kind_name(&to.kind));
@@ -111,11 +128,7 @@ pub fn trace_missing_dependency_chains(graph: &DependencyGraph) -> Vec<Dependenc
                 tail.push_str(&format!(" ({detail})"));
             }
             traces.push(DependencyTrace {
-                chain: vec![
-                    resource_label(&from),
-                    resource_label(&to),
-                    tail,
-                ],
+                chain: vec![resource_label(&from), resource_label(&to), tail],
             });
         }
     }
@@ -136,12 +149,16 @@ fn resource_label(resource: &ResourceId) -> String {
 
 fn resource_kind_name(kind: &ResourceKind) -> &'static str {
     match kind {
+        ResourceKind::Deployment => "Deployment",
+        ResourceKind::ReplicaSet => "ReplicaSet",
         ResourceKind::Pod => "Pod",
+        ResourceKind::Ingress => "Ingress",
         ResourceKind::Service => "Service",
         ResourceKind::Node => "Node",
         ResourceKind::Secret => "Secret",
         ResourceKind::ConfigMap => "ConfigMap",
         ResourceKind::PersistentVolumeClaim => "PersistentVolumeClaim",
+        ResourceKind::PersistentVolume => "PersistentVolume",
         ResourceKind::NetworkPolicy => "NetworkPolicy",
     }
 }
@@ -162,6 +179,7 @@ mod tests {
         fn analyze(&self, _ctx: &AnalysisContext) -> Option<Diagnosis> {
             Some(Diagnosis {
                 severity: Severity::Info,
+                confidence: 1.0,
                 resource: "Test/resource".to_string(),
                 message: "context-analyzer".to_string(),
                 root_cause: "test".to_string(),
@@ -175,6 +193,7 @@ mod tests {
         fn analyze_graph(&self, _input: &AnalysisInput<'_>) -> Option<Diagnosis> {
             Some(Diagnosis {
                 severity: Severity::Warning,
+                confidence: 1.0,
                 resource: "Test/resource".to_string(),
                 message: "graph-analyzer".to_string(),
                 root_cause: "test".to_string(),
@@ -190,6 +209,8 @@ mod tests {
             namespace: "default".to_string(),
             phase: "Running".to_string(),
             restart_count: 0,
+            controller_kind: None,
+            controller_name: None,
             node: "node-a".to_string(),
             pod_labels: BTreeMap::new(),
             scheduling: PodSchedulingState {
@@ -219,6 +240,8 @@ mod tests {
             namespace: "prod".to_string(),
             phase: "Pending".to_string(),
             restart_count: 0,
+            controller_kind: None,
+            controller_name: None,
             node: "unassigned".to_string(),
             pod_labels: BTreeMap::new(),
             scheduling: PodSchedulingState {

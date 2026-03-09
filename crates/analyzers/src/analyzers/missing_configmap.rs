@@ -67,6 +67,7 @@ impl GraphAnalyzer for MissingConfigMapAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.97,
             resource,
             message: "Missing ConfigMap dependency detected".to_string(),
             root_cause,

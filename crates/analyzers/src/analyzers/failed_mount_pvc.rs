@@ -17,7 +17,10 @@ impl GraphAnalyzer for FailedMountPvcAnalyzer {
     }
 }
 
-fn analyze_storage(ctx: &AnalysisContext, graph: Option<&graph::DependencyGraph>) -> Option<Diagnosis> {
+fn analyze_storage(
+    ctx: &AnalysisContext,
+    graph: Option<&graph::DependencyGraph>,
+) -> Option<Diagnosis> {
     let mut evidence = Vec::new();
     let mut resources = BTreeSet::new();
 
@@ -38,17 +41,21 @@ fn analyze_storage(ctx: &AnalysisContext, graph: Option<&graph::DependencyGraph>
 
     if let Some(graph) = graph {
         for status in [DependencyStatus::Missing, DependencyStatus::Unknown] {
-            for (pod, pvc, meta) in graph.relations_with_status(
-                Relation::MountsPersistentVolumeClaim,
-                status.clone(),
-            ) {
-                let pod_namespace = pod.namespace.clone().unwrap_or_else(|| "default".to_string());
+            for (pod, pvc, meta) in
+                graph.relations_with_status(Relation::MountsPersistentVolumeClaim, status.clone())
+            {
+                let pod_namespace = pod
+                    .namespace
+                    .clone()
+                    .unwrap_or_else(|| "default".to_string());
                 resources.insert(format!("Pod/{}/{}", pod_namespace, pod.name));
                 let mut line = format!(
                     "Pod/{}/{} -> PersistentVolumeClaim/{}/{} status={:?}",
                     pod_namespace,
                     pod.name,
-                    pvc.namespace.clone().unwrap_or_else(|| "default".to_string()),
+                    pvc.namespace
+                        .clone()
+                        .unwrap_or_else(|| "default".to_string()),
                     pvc.name,
                     status
                 );
@@ -113,6 +120,7 @@ fn analyze_storage(ctx: &AnalysisContext, graph: Option<&graph::DependencyGraph>
 
     Some(Diagnosis {
         severity: Severity::Warning,
+        confidence: 0.89,
         resource,
         message: "Persistent volume mount failure detected".to_string(),
         root_cause: "Pod cannot mount storage because PVC/PV is missing or unbound".to_string(),

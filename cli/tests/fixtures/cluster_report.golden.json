@@ -3,6 +3,7 @@
   "diagnoses": [
     {
       "severity": "Critical",
+      "confidence": 0.98,
       "resource": "Pod/prod/payments-api",
       "message": "Missing Secret dependency detected",
       "root_cause": "Pod failing because secret db-password does not exist",
@@ -12,20 +13,22 @@
     },
     {
       "severity": "Warning",
-      "resource": "Pod/prod/payments-api",
-      "message": "NetworkPolicy blocking traffic",
-      "root_cause": "NetworkPolicy rules deny expected ingress/egress for selected pods",
-      "evidence": [
-        "NetworkPolicy/prod/deny-all -> Pod/prod/payments-api direction=ingress+egress selector={\"app\": \"payments-api\"} source=spec.podSelector detail=policy_types=[\"Ingress\", \"Egress\"] ingress_rules=false egress_rules=false"
-      ]
-    },
-    {
-      "severity": "Warning",
+      "confidence": 0.9,
       "resource": "Service/prod/payments",
       "message": "Service selector mismatch detected",
       "root_cause": "Service selector does not match any pod labels",
       "evidence": [
         "service=prod/payments selector=[app=payments] has no matched pods"
+      ]
+    },
+    {
+      "severity": "Warning",
+      "confidence": 0.8,
+      "resource": "Pod/prod/payments-api",
+      "message": "NetworkPolicy blocking traffic",
+      "root_cause": "NetworkPolicy rules deny expected ingress/egress for selected pods",
+      "evidence": [
+        "NetworkPolicy/prod/deny-all -> Pod/prod/payments-api direction=ingress+egress selector={\"app\": \"payments-api\"} ingress_rules=0 egress_rules=0 ingress_peers=0 egress_peers=0 ingress_ports=0 egress_ports=0 source=spec.podSelector detail=types=[\"Ingress\", \"Egress\"] ingress_rules=0 egress_rules=0 ingress_peers=0 egress_peers=0 ingress_ports=0 egress_ports=0 default_deny_ingress=true default_deny_egress=true"
       ]
     }
   ],

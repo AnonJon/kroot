@@ -8,6 +8,8 @@ pub struct PodState {
     pub namespace: String,
     pub phase: String,
     pub restart_count: u32,
+    pub controller_kind: Option<String>,
+    pub controller_name: Option<String>,
     pub node: String,
     pub pod_labels: BTreeMap<String, String>,
     pub scheduling: PodSchedulingState,

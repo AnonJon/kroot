@@ -106,8 +106,14 @@ fn detects_network_policy_blocking() {
         namespace: "prod".to_string(),
         pod_selector: selector,
         policy_types: vec!["Ingress".to_string(), "Egress".to_string()],
-        has_ingress_rules: false,
-        has_egress_rules: false,
+        ingress_rule_count: 0,
+        egress_rule_count: 0,
+        ingress_peer_count: 0,
+        egress_peer_count: 0,
+        ingress_port_count: 0,
+        egress_port_count: 0,
+        default_deny_ingress: true,
+        default_deny_egress: true,
     };
     let analyzer = NetworkPolicyBlockingAnalyzer;
     let ctx = AnalysisContextBuilder::new()

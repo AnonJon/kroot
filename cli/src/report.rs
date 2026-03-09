@@ -12,6 +12,7 @@ struct EvidenceRow {
 #[derive(Tabled)]
 struct DiagnosisRow {
     severity: String,
+    confidence: String,
     resource: String,
     status: String,
     root_cause: String,
@@ -68,6 +69,7 @@ pub fn render_pod_report(
     let diagnosis_rows = if diagnoses.is_empty() {
         vec![DiagnosisRow {
             severity: "INFO".to_string(),
+            confidence: "1.00".to_string(),
             resource: format!("Pod/{}/{}", pod.namespace, pod.name),
             status: "No diagnosis".to_string(),
             root_cause: "No issue detected".to_string(),
@@ -77,6 +79,7 @@ pub fn render_pod_report(
             .iter()
             .map(|diag| DiagnosisRow {
                 severity: severity_label(diag.severity).to_string(),
+                confidence: format!("{:.2}", diag.confidence),
                 resource: diag.resource.clone(),
                 status: diag.message.clone(),
                 root_cause: diag.root_cause.clone(),
@@ -179,8 +182,10 @@ fn severity_rank(severity: types::Severity) -> u8 {
 }
 
 pub fn normalize_diagnoses(diagnoses: Vec<Diagnosis>) -> Vec<Diagnosis> {
-    let mut merged: BTreeMap<(u8, String, String, String), (types::Severity, BTreeSet<String>)> =
-        BTreeMap::new();
+    let mut merged: BTreeMap<
+        (u8, String, String, String),
+        (types::Severity, f32, BTreeSet<String>),
+    > = BTreeMap::new();
 
     for diagnosis in diagnoses {
         let key = (
@@ -189,23 +194,31 @@ pub fn normalize_diagnoses(diagnoses: Vec<Diagnosis>) -> Vec<Diagnosis> {
             diagnosis.message.clone(),
             diagnosis.root_cause.clone(),
         );
-        let entry = merged
-            .entry(key)
-            .or_insert((diagnosis.severity, BTreeSet::new()));
+        let entry = merged.entry(key).or_insert((
+            diagnosis.severity,
+            diagnosis.confidence,
+            BTreeSet::new(),
+        ));
+        if diagnosis.confidence > entry.1 {
+            entry.1 = diagnosis.confidence;
+        }
         for evidence in diagnosis.evidence {
-            entry.1.insert(evidence);
+            entry.2.insert(evidence);
         }
     }
 
     let mut normalized = merged
         .into_iter()
         .map(
-            |((_rank, resource, message, root_cause), (severity, evidence_set))| Diagnosis {
-                severity,
-                resource,
-                message,
-                root_cause,
-                evidence: evidence_set.into_iter().collect(),
+            |((_rank, resource, message, root_cause), (severity, confidence, evidence_set))| {
+                Diagnosis {
+                    severity,
+                    confidence,
+                    resource,
+                    message,
+                    root_cause,
+                    evidence: evidence_set.into_iter().collect(),
+                }
             },
         )
         .collect::<Vec<_>>();
@@ -213,6 +226,7 @@ pub fn normalize_diagnoses(diagnoses: Vec<Diagnosis>) -> Vec<Diagnosis> {
     normalized.sort_by(|a, b| {
         severity_rank(b.severity)
             .cmp(&severity_rank(a.severity))
+            .then_with(|| b.confidence.total_cmp(&a.confidence))
             .then_with(|| a.resource.cmp(&b.resource))
             .then_with(|| a.message.cmp(&b.message))
             .then_with(|| a.root_cause.cmp(&b.root_cause))
@@ -246,6 +260,8 @@ mod tests {
             namespace: "prod".to_string(),
             phase: "Running".to_string(),
             restart_count: 3,
+            controller_kind: None,
+            controller_name: None,
             node: "worker-1".to_string(),
             pod_labels: labels,
             scheduling: PodSchedulingState {
@@ -280,6 +296,7 @@ mod tests {
         let diagnoses = vec![
             Diagnosis {
                 severity: Severity::Warning,
+                confidence: 0.9,
                 resource: "Pod/prod/a".to_string(),
                 message: "X".to_string(),
                 root_cause: "A".to_string(),
@@ -287,6 +304,7 @@ mod tests {
             },
             Diagnosis {
                 severity: Severity::Critical,
+                confidence: 0.95,
                 resource: "Pod/prod/b".to_string(),
                 message: "Y".to_string(),
                 root_cause: "B".to_string(),
@@ -294,6 +312,7 @@ mod tests {
             },
             Diagnosis {
                 severity: Severity::Warning,
+                confidence: 0.85,
                 resource: "Pod/prod/a".to_string(),
                 message: "X".to_string(),
                 root_cause: "A".to_string(),
@@ -315,6 +334,7 @@ mod tests {
         let pod = sample_pod();
         let diagnoses = vec![Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.98,
             resource: "Pod/prod/payments-api".to_string(),
             message: "Missing Secret dependency detected".to_string(),
             root_cause: "Pod failing because secret db-password does not exist".to_string(),

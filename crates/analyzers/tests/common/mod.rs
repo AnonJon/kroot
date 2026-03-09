@@ -10,6 +10,8 @@ pub fn base_pod() -> PodState {
         namespace: "prod".to_string(),
         phase: "Running".to_string(),
         restart_count: 0,
+        controller_kind: None,
+        controller_name: None,
         node: "node-1".to_string(),
         pod_labels: labels,
         scheduling: PodSchedulingState {

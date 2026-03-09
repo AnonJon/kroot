@@ -40,6 +40,7 @@ impl Analyzer for NodeNotReadyAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.93,
             resource,
             message: "Node NotReady detected".to_string(),
             root_cause: "Node is unhealthy or disconnected from control plane".to_string(),

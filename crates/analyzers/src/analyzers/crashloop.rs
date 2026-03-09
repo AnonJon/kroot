@@ -52,6 +52,7 @@ impl Analyzer for CrashLoopBackOffAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Warning,
+            confidence: 0.95,
             resource,
             message: "CrashLoopBackOff detected".to_string(),
             root_cause: "Container repeatedly exits and Kubernetes is backing off restarts"

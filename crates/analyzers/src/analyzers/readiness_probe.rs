@@ -38,6 +38,7 @@ impl Analyzer for FailedReadinessProbeAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Warning,
+            confidence: 0.88,
             resource,
             message: "Readiness probe failures detected".to_string(),
             root_cause: "Pod is running but failing readiness checks".to_string(),

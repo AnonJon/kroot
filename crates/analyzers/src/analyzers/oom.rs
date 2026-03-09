@@ -51,6 +51,7 @@ impl Analyzer for OOMKilledAnalyzer {
 
         Some(Diagnosis {
             severity: Severity::Critical,
+            confidence: 0.96,
             resource,
             message: "OOMKilled detected".to_string(),
             root_cause: "Container exceeded memory limit and was killed".to_string(),
