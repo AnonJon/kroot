@@ -12,7 +12,7 @@ Root cause analysis for Kubernetes incidents.
 builds dependency graphs, and explains _why failures occur_.
 
 Instead of only detecting symptoms, `kroot` builds a dependency graph
-and traces resource relationships to explain root causes.
+and traces resource relationships to identify root causes.
 
 ## TL;DR
 
@@ -21,6 +21,45 @@ kroot diagnose cluster -A
 ```
 
 Find root causes for Kubernetes failures using dependency-aware analysis.
+
+## Example Output
+
+```text
+$ kroot diagnose cluster -n prod
+
+Diagnosis Report
+----------------
+
+3 issues detected
+
+CRITICAL Pod/prod/payments-api -> Missing Secret dependency detected
+  Root cause: Pod failing because secret db-password does not exist
+WARNING Service/prod/payments -> Service selector mismatch detected
+  Root cause: Service selector does not match any pod labels
+WARNING Pod/prod/payments-api -> Network reachability blocked by NetworkPolicy
+  Root cause: Ingress/egress rules do not permit required peer and port communication
+
+Dependency Traces:
+  [0.90] Pod/prod/payments-api -> NetworkPolicy/prod/deny-all -> NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
+
+Blast Radius:
+  [#1 score=14.70 conf=0.98] NetworkPolicy/prod/deny-all
+    pods=1 services=0 deployments=1 ingresses=0
+    impacted pods: Pod/prod/payments-api
+    impacted deployments: Deployment/prod/payments-api
+
+Suggested Fixes:
+  Missing Secret dependency detected (Pod/prod/payments-api)
+    Summary: Create the missing Secret or update pod references
+  Network reachability blocked by NetworkPolicy (Pod/prod/payments-api)
+    Summary: Allow required peer and port combinations in NetworkPolicy
+```
+
+## Demo
+
+Terminal demo of `kroot` diagnosing a cluster:
+
+`Coming soon (asciinema/GIF)`
 
 ## How kroot Works
 
@@ -35,13 +74,14 @@ This allows `kroot` to report not just failing resources, but the dependency cha
 ## Contents
 
 - [TL;DR](#tldr)
+- [Example Output](#example-output)
+- [Demo](#demo)
 - [How kroot Works](#how-kroot-works)
 - [Why kroot](#why-kroot)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [When to Use kroot](#when-to-use-kroot)
-- [Example Output](#example-output)
 - [Command Reference](#command-reference)
 - [Output Formats](#output-formats)
 - [Release Binaries and Package Managers](#release-binaries-and-package-managers)
@@ -49,6 +89,7 @@ This allows `kroot` to report not just failing resources, but the dependency cha
 - [Analyzer Coverage](#analyzer-coverage)
 - [Why not kubectl?](#why-not-kubectl)
 - [Project Status](#project-status)
+- [Tool Comparison](#tool-comparison)
 - [Similar Tools](#similar-tools)
 - [Kubernetes Permissions (RBAC)](#kubernetes-permissions-rbac)
 - [Architecture](#architecture)
@@ -72,8 +113,7 @@ Example chain:
 - Graph-first diagnosis pipeline using `petgraph`
 - 12 built-in analyzers for common production failure patterns
 - Upstream root-cause traversal to first broken dependency
-- Directional NetworkPolicy reachability RCA with peer + port simulation
-  (namespace/pod selectors, named ports/ranges, and ipBlock-aware reasoning)
+- NetworkPolicy reachability analysis with peer + port simulation
 - Blast-radius analysis with ranked impact scoring for pods/services/deployments/ingresses
 - Confidence scoring for diagnoses and dependency traces
 - Suggested remediation output (summary + steps, optional command snippets)
@@ -151,39 +191,6 @@ Typical workflow:
 1. Run `kroot diagnose cluster`.
 2. Inspect dependency traces.
 3. Identify the upstream failing resource.
-
-## Example Output
-
-```text
-$ kroot diagnose cluster -n prod
-
-Diagnosis Report
-----------------
-
-3 issues detected
-
-CRITICAL Pod/prod/payments-api -> Missing Secret dependency detected
-  Root cause: Pod failing because secret db-password does not exist
-WARNING Service/prod/payments -> Service selector mismatch detected
-  Root cause: Service selector does not match any pod labels
-WARNING Pod/prod/payments-api -> Network reachability blocked by NetworkPolicy
-  Root cause: Ingress/egress rules do not permit required peer and port communication
-
-Dependency Traces:
-  [0.90] Pod/prod/payments-api -> NetworkPolicy/prod/deny-all -> NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
-
-Blast Radius:
-  [#1 score=14.70 conf=0.98] NetworkPolicy/prod/deny-all
-    pods=1 services=0 deployments=1 ingresses=0
-    impacted pods: Pod/prod/payments-api
-    impacted deployments: Deployment/prod/payments-api
-
-Suggested Fixes:
-  Missing Secret dependency detected (Pod/prod/payments-api)
-    Summary: Create the missing Secret or update pod references
-  Network reachability blocked by NetworkPolicy (Pod/prod/payments-api)
-    Summary: Allow required peer and port combinations in NetworkPolicy
-```
 
 ## Command Reference
 
@@ -324,8 +331,6 @@ That gives a direct root-cause path instead of disconnected clues.
 
 `kroot` is early-stage but functional for real diagnostics.
 
-First public release: `v0.1.0` (March 8, 2026).
-
 Current capabilities:
 
 - cluster and pod diagnosis
@@ -339,6 +344,15 @@ Current capabilities:
 - offline context analysis via `--context-file`
 
 Expect active iteration as graph coverage and reasoning depth expand.
+
+## Tool Comparison
+
+| Tool         | Focus                                |
+| ------------ | ------------------------------------ |
+| `kubectl`    | manual debugging                     |
+| `popeye`     | cluster linting                      |
+| `kube-score` | manifest analysis                    |
+| `kroot`      | dependency-aware root cause analysis |
 
 ## Similar Tools
 
