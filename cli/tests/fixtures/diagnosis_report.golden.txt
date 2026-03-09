@@ -31,6 +31,12 @@ Blast Radius:
 | 1    | 15.36        | 0.96       | Secret/prod/db-password | Pod/prod/payments-api | -                 | Deployment/prod/payments-api | -                  |
 +------+--------------+------------+-------------------------+-----------------------+-------------------+------------------------------+--------------------+
 
+Incident Analysis:
+  No causal incident narrative available
+
+Recommended Fix Order:
+  No fix priorities available
+
 Suggested Fixes:
   Missing Secret dependency detected (Pod/prod/payments-api)
     Summary: Create missing secret

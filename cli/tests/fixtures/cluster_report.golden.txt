@@ -27,6 +27,56 @@ Blast Radius:
   [#4 score=2.94 conf=0.98] Secret/db-password
     pods=0 services=0 deployments=0 ingresses=0
 
+Incident Analysis:
+  [score=14.70 conf=0.98] NetworkPolicy/prod/deny-all
+    Detail: NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
+    Chain: Pod/prod/payments-api -> NetworkPolicy/prod/deny-all -> NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
+    Affected: Deployment/prod/payments-api, Pod/prod/payments-api
+  [score=11.76 conf=0.98] Pod/prod/payments-api
+    Detail: NetworkPolicy/prod/deny-all
+    Chain: Pod/prod/payments-api -> NetworkPolicy/prod/deny-all
+    Affected: Deployment/prod/payments-api
+  [score=6.30 conf=0.90] Service/prod/payments
+    Detail: No explicit upstream edge available
+    Chain: Service/prod/payments -> Upstream dependency failure inferred from dependency graph
+    Affected: Ingress/prod/payments-ingress
+  [score=2.94 conf=0.98] Secret/db-password
+    Detail: Secret missing source=pod.dependencies
+    Chain: Pod/prod/payments-api -> Secret/db-password -> Secret missing source=pod.dependencies
+
+Recommended Fix Order:
+  1. NetworkPolicy/prod/deny-all [score=14.70 conf=0.98]
+    Diagnosis: Network reachability blocked by NetworkPolicy
+    Summary: Allow required peer and port combinations in NetworkPolicy
+    Restores: Deployment/prod/payments-api, Pod/prod/payments-api
+    Steps:
+      1. Identify blocked service or pod traffic paths from the evidence chain
+      2. Add explicit ingress/egress peers and required ports for expected flows
+      3. Re-test connectivity after applying policy updates
+  2. Pod/prod/payments-api [score=11.76 conf=0.98]
+    Diagnosis: Missing Secret dependency detected
+    Summary: Create the missing Secret or update pod references
+    Restores: Deployment/prod/payments-api
+    Steps:
+      1. Create the referenced secret in the same namespace as the failing pod
+      2. Ensure expected key names match the pod env/volume references
+      3. Restart workload rollout after the secret is created or corrected
+  3. Service/prod/payments [score=6.30 conf=0.90]
+    Diagnosis: Service selector mismatch detected
+    Summary: Align Service selectors with workload pod labels
+    Restores: Ingress/prod/payments-ingress
+    Steps:
+      1. Compare service selector keys/values against pod labels
+      2. Update the service selector or workload labels to match
+      3. Confirm endpoints are populated after reconciliation
+  4. Secret/db-password [score=2.94 conf=0.98]
+    Diagnosis: Missing Secret dependency detected
+    Summary: Create the missing Secret or update pod references
+    Steps:
+      1. Create the referenced secret in the same namespace as the failing pod
+      2. Ensure expected key names match the pod env/volume references
+      3. Restart workload rollout after the secret is created or corrected
+
 Suggested Fixes:
   Missing Secret dependency detected (Pod/prod/payments-api)
     Summary: Create the missing Secret or update pod references

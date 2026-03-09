@@ -128,5 +128,142 @@
       "impacted_deployments": [],
       "impacted_ingresses": []
     }
+  ],
+  "incident_narratives": [
+    {
+      "root_cause": "NetworkPolicy/prod/deny-all",
+      "root_cause_detail": "NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])",
+      "confidence": 0.98,
+      "impact_score": 14.700001,
+      "failure_chain": [
+        "Pod/prod/payments-api",
+        "NetworkPolicy/prod/deny-all",
+        "NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])"
+      ],
+      "affected_resources": [
+        "Deployment/prod/payments-api",
+        "Pod/prod/payments-api"
+      ]
+    },
+    {
+      "root_cause": "Pod/prod/payments-api",
+      "root_cause_detail": "NetworkPolicy/prod/deny-all",
+      "confidence": 0.98,
+      "impact_score": 11.76,
+      "failure_chain": [
+        "Pod/prod/payments-api",
+        "NetworkPolicy/prod/deny-all"
+      ],
+      "affected_resources": [
+        "Deployment/prod/payments-api"
+      ]
+    },
+    {
+      "root_cause": "Service/prod/payments",
+      "root_cause_detail": "No explicit upstream edge available",
+      "confidence": 0.9,
+      "impact_score": 6.2999997,
+      "failure_chain": [
+        "Service/prod/payments",
+        "Upstream dependency failure inferred from dependency graph"
+      ],
+      "affected_resources": [
+        "Ingress/prod/payments-ingress"
+      ]
+    },
+    {
+      "root_cause": "Secret/db-password",
+      "root_cause_detail": "Secret missing source=pod.dependencies",
+      "confidence": 0.98,
+      "impact_score": 2.94,
+      "failure_chain": [
+        "Pod/prod/payments-api",
+        "Secret/db-password",
+        "Secret missing source=pod.dependencies"
+      ],
+      "affected_resources": []
+    }
+  ],
+  "fix_priorities": [
+    {
+      "rank": 1,
+      "resource": "NetworkPolicy/prod/deny-all",
+      "diagnosis": "Network reachability blocked by NetworkPolicy",
+      "confidence": 0.98,
+      "impact_score": 14.700001,
+      "restores": [
+        "Deployment/prod/payments-api",
+        "Pod/prod/payments-api"
+      ],
+      "summary": "Allow required peer and port combinations in NetworkPolicy",
+      "steps": [
+        "Identify blocked service or pod traffic paths from the evidence chain",
+        "Add explicit ingress/egress peers and required ports for expected flows",
+        "Re-test connectivity after applying policy updates"
+      ],
+      "commands": [
+        "kubectl get networkpolicy -A",
+        "kubectl describe networkpolicy <policy> -n <namespace>"
+      ]
+    },
+    {
+      "rank": 2,
+      "resource": "Pod/prod/payments-api",
+      "diagnosis": "Missing Secret dependency detected",
+      "confidence": 0.98,
+      "impact_score": 11.76,
+      "restores": [
+        "Deployment/prod/payments-api"
+      ],
+      "summary": "Create the missing Secret or update pod references",
+      "steps": [
+        "Create the referenced secret in the same namespace as the failing pod",
+        "Ensure expected key names match the pod env/volume references",
+        "Restart workload rollout after the secret is created or corrected"
+      ],
+      "commands": [
+        "kubectl create secret generic <secret-name> -n <namespace> --from-literal=<key>=<value>",
+        "kubectl rollout restart deployment/<deployment> -n <namespace>"
+      ]
+    },
+    {
+      "rank": 3,
+      "resource": "Service/prod/payments",
+      "diagnosis": "Service selector mismatch detected",
+      "confidence": 0.9,
+      "impact_score": 6.2999997,
+      "restores": [
+        "Ingress/prod/payments-ingress"
+      ],
+      "summary": "Align Service selectors with workload pod labels",
+      "steps": [
+        "Compare service selector keys/values against pod labels",
+        "Update the service selector or workload labels to match",
+        "Confirm endpoints are populated after reconciliation"
+      ],
+      "commands": [
+        "kubectl get svc <service> -n <namespace> -o yaml",
+        "kubectl get pods -n <namespace> --show-labels",
+        "kubectl get endpoints <service> -n <namespace>"
+      ]
+    },
+    {
+      "rank": 4,
+      "resource": "Secret/db-password",
+      "diagnosis": "Missing Secret dependency detected",
+      "confidence": 0.98,
+      "impact_score": 2.94,
+      "restores": [],
+      "summary": "Create the missing Secret or update pod references",
+      "steps": [
+        "Create the referenced secret in the same namespace as the failing pod",
+        "Ensure expected key names match the pod env/volume references",
+        "Restart workload rollout after the secret is created or corrected"
+      ],
+      "commands": [
+        "kubectl create secret generic <secret-name> -n <namespace> --from-literal=<key>=<value>",
+        "kubectl rollout restart deployment/<deployment> -n <namespace>"
+      ]
+    }
   ]
 }

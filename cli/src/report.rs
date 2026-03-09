@@ -41,17 +41,23 @@ pub fn print_pod_report(
     diagnoses: Vec<Diagnosis>,
     traces: Vec<engine::DependencyTrace>,
     blast_radius: Vec<engine::BlastRadiusImpact>,
+    incident_narratives: Vec<engine::IncidentNarrative>,
+    fix_priorities: Vec<engine::FixPriority>,
     show_fixes: bool,
     show_commands: bool,
 ) {
     let diagnoses = normalize_diagnoses(diagnoses);
     let traces = normalize_dependency_traces(traces);
     let blast_radius = normalize_blast_radius(blast_radius);
+    let incident_narratives = normalize_incident_narratives(incident_narratives);
+    let fix_priorities = normalize_fix_priorities(fix_priorities);
     let report = render_pod_report(
         pod,
         &diagnoses,
         &traces,
         &blast_radius,
+        &incident_narratives,
+        &fix_priorities,
         show_fixes,
         show_commands,
     );
@@ -66,16 +72,22 @@ pub fn print_cluster_report(
     diagnoses: Vec<Diagnosis>,
     traces: Vec<engine::DependencyTrace>,
     blast_radius: Vec<engine::BlastRadiusImpact>,
+    incident_narratives: Vec<engine::IncidentNarrative>,
+    fix_priorities: Vec<engine::FixPriority>,
     show_fixes: bool,
     show_commands: bool,
 ) {
     let diagnoses = normalize_diagnoses(diagnoses);
     let traces = normalize_dependency_traces(traces);
     let blast_radius = normalize_blast_radius(blast_radius);
+    let incident_narratives = normalize_incident_narratives(incident_narratives);
+    let fix_priorities = normalize_fix_priorities(fix_priorities);
     let report = render_cluster_report(
         &diagnoses,
         &traces,
         &blast_radius,
+        &incident_narratives,
+        &fix_priorities,
         show_fixes,
         show_commands,
     );
@@ -91,6 +103,8 @@ pub fn render_pod_report(
     diagnoses: &[Diagnosis],
     traces: &[engine::DependencyTrace],
     blast_radius: &[engine::BlastRadiusImpact],
+    incident_narratives: &[engine::IncidentNarrative],
+    fix_priorities: &[engine::FixPriority],
     show_fixes: bool,
     show_commands: bool,
 ) -> String {
@@ -204,6 +218,62 @@ pub fn render_pod_report(
     };
     out.push_str(&format!("{}\n", Table::new(blast_rows)));
 
+    out.push('\n');
+    out.push_str("Incident Analysis:\n");
+    if incident_narratives.is_empty() {
+        out.push_str("  No causal incident narrative available\n");
+    } else {
+        for narrative in incident_narratives {
+            out.push_str(&format!(
+                "  [score={:.2} conf={:.2}] Root cause: {}\n",
+                narrative.impact_score, narrative.confidence, narrative.root_cause
+            ));
+            out.push_str(&format!("    Detail: {}\n", narrative.root_cause_detail));
+            out.push_str(&format!(
+                "    Failure chain: {}\n",
+                narrative.failure_chain.join(" -> ")
+            ));
+            if !narrative.affected_resources.is_empty() {
+                out.push_str(&format!(
+                    "    Affected: {}\n",
+                    narrative.affected_resources.join(", ")
+                ));
+            }
+        }
+    }
+
+    if show_fixes {
+        out.push('\n');
+        out.push_str("Recommended Fix Order:\n");
+        if fix_priorities.is_empty() {
+            out.push_str("  No fix priorities available\n");
+        } else {
+            for fix in fix_priorities {
+                out.push_str(&format!(
+                    "  {}. {} [{:.2} | conf={:.2}]\n",
+                    fix.rank, fix.resource, fix.impact_score, fix.confidence
+                ));
+                out.push_str(&format!("     Diagnosis: {}\n", fix.diagnosis));
+                out.push_str(&format!("     Summary: {}\n", fix.summary));
+                if !fix.restores.is_empty() {
+                    out.push_str(&format!("     Restores: {}\n", fix.restores.join(", ")));
+                }
+                if !fix.steps.is_empty() {
+                    out.push_str("     Steps:\n");
+                    for (idx, step) in fix.steps.iter().enumerate() {
+                        out.push_str(&format!("       {}. {}\n", idx + 1, step));
+                    }
+                }
+                if show_commands && !fix.commands.is_empty() {
+                    out.push_str("     Commands:\n");
+                    for command in &fix.commands {
+                        out.push_str(&format!("       - {command}\n"));
+                    }
+                }
+            }
+        }
+    }
+
     if show_fixes {
         out.push('\n');
         out.push_str("Suggested Fixes:\n");
@@ -217,6 +287,8 @@ pub fn render_cluster_report(
     diagnoses: &[Diagnosis],
     traces: &[engine::DependencyTrace],
     blast_radius: &[engine::BlastRadiusImpact],
+    incident_narratives: &[engine::IncidentNarrative],
+    fix_priorities: &[engine::FixPriority],
     show_fixes: bool,
     show_commands: bool,
 ) -> String {
@@ -295,7 +367,61 @@ pub fn render_cluster_report(
         }
     }
 
+    out.push('\n');
+    out.push_str("Incident Analysis:\n");
+    if incident_narratives.is_empty() {
+        out.push_str("  No causal incident narrative available\n");
+    } else {
+        for narrative in incident_narratives {
+            out.push_str(&format!(
+                "  [score={:.2} conf={:.2}] {}\n",
+                narrative.impact_score, narrative.confidence, narrative.root_cause
+            ));
+            out.push_str(&format!("    Detail: {}\n", narrative.root_cause_detail));
+            out.push_str(&format!(
+                "    Chain: {}\n",
+                narrative.failure_chain.join(" -> ")
+            ));
+            if !narrative.affected_resources.is_empty() {
+                out.push_str(&format!(
+                    "    Affected: {}\n",
+                    narrative.affected_resources.join(", ")
+                ));
+            }
+        }
+    }
+
     if show_fixes {
+        out.push('\n');
+        out.push_str("Recommended Fix Order:\n");
+        if fix_priorities.is_empty() {
+            out.push_str("  No fix priorities available\n");
+        } else {
+            for fix in fix_priorities {
+                out.push_str(&format!(
+                    "  {}. {} [score={:.2} conf={:.2}]\n",
+                    fix.rank, fix.resource, fix.impact_score, fix.confidence
+                ));
+                out.push_str(&format!("    Diagnosis: {}\n", fix.diagnosis));
+                out.push_str(&format!("    Summary: {}\n", fix.summary));
+                if !fix.restores.is_empty() {
+                    out.push_str(&format!("    Restores: {}\n", fix.restores.join(", ")));
+                }
+                if !fix.steps.is_empty() {
+                    out.push_str("    Steps:\n");
+                    for (idx, step) in fix.steps.iter().enumerate() {
+                        out.push_str(&format!("      {}. {}\n", idx + 1, step));
+                    }
+                }
+                if show_commands && !fix.commands.is_empty() {
+                    out.push_str("    Commands:\n");
+                    for command in &fix.commands {
+                        out.push_str(&format!("      - {command}\n"));
+                    }
+                }
+            }
+        }
+
         out.push('\n');
         out.push_str("Suggested Fixes:\n");
         out.push_str(&render_fixes(diagnoses, show_commands, 2));
@@ -461,6 +587,99 @@ fn normalize_blast_radius(
     });
     for (idx, impact) in normalized.iter_mut().enumerate() {
         impact.rank = idx + 1;
+    }
+    normalized
+}
+
+fn normalize_incident_narratives(
+    narratives: Vec<engine::IncidentNarrative>,
+) -> Vec<engine::IncidentNarrative> {
+    let mut merged = BTreeMap::<String, engine::IncidentNarrative>::new();
+    for narrative in narratives {
+        let key = narrative.root_cause.clone();
+        match merged.get_mut(&key) {
+            Some(existing) => {
+                if narrative.confidence > existing.confidence {
+                    existing.confidence = narrative.confidence;
+                }
+                if narrative.impact_score > existing.impact_score {
+                    existing.impact_score = narrative.impact_score;
+                }
+                if narrative.failure_chain.len() > existing.failure_chain.len() {
+                    existing.failure_chain = narrative.failure_chain.clone();
+                }
+                if narrative.root_cause_detail.len() > existing.root_cause_detail.len() {
+                    existing.root_cause_detail = narrative.root_cause_detail.clone();
+                }
+                existing
+                    .affected_resources
+                    .extend(narrative.affected_resources.into_iter());
+                existing.affected_resources.sort();
+                existing.affected_resources.dedup();
+            }
+            None => {
+                merged.insert(key, narrative);
+            }
+        }
+    }
+
+    let mut normalized = merged.into_values().collect::<Vec<_>>();
+    normalized.sort_by(|a, b| {
+        b.impact_score
+            .total_cmp(&a.impact_score)
+            .then_with(|| b.confidence.total_cmp(&a.confidence))
+            .then_with(|| a.root_cause.cmp(&b.root_cause))
+    });
+    normalized
+}
+
+fn normalize_fix_priorities(priorities: Vec<engine::FixPriority>) -> Vec<engine::FixPriority> {
+    let mut merged = BTreeMap::<String, engine::FixPriority>::new();
+    for priority in priorities {
+        let key = priority.resource.clone();
+        match merged.get_mut(&key) {
+            Some(existing) => {
+                if priority.impact_score > existing.impact_score {
+                    existing.impact_score = priority.impact_score;
+                }
+                if priority.confidence > existing.confidence {
+                    existing.confidence = priority.confidence;
+                }
+                if existing.diagnosis == "Upstream dependency failure"
+                    && priority.diagnosis != "Upstream dependency failure"
+                {
+                    existing.diagnosis = priority.diagnosis.clone();
+                }
+                if existing.summary.starts_with("Investigate and resolve")
+                    && !priority.summary.starts_with("Investigate and resolve")
+                {
+                    existing.summary = priority.summary.clone();
+                }
+                if existing.steps.is_empty() && !priority.steps.is_empty() {
+                    existing.steps = priority.steps.clone();
+                }
+                if existing.commands.is_empty() && !priority.commands.is_empty() {
+                    existing.commands = priority.commands.clone();
+                }
+                existing.restores.extend(priority.restores.into_iter());
+                existing.restores.sort();
+                existing.restores.dedup();
+            }
+            None => {
+                merged.insert(key, priority);
+            }
+        }
+    }
+
+    let mut normalized = merged.into_values().collect::<Vec<_>>();
+    normalized.sort_by(|a, b| {
+        b.impact_score
+            .total_cmp(&a.impact_score)
+            .then_with(|| b.confidence.total_cmp(&a.confidence))
+            .then_with(|| a.resource.cmp(&b.resource))
+    });
+    for (idx, priority) in normalized.iter_mut().enumerate() {
+        priority.rank = idx + 1;
     }
     normalized
 }
@@ -638,7 +857,16 @@ mod tests {
             impacted_deployments: vec!["Deployment/prod/payments-api".to_string()],
             impacted_ingresses: vec![],
         }];
-        let report = render_pod_report(&pod, &diagnoses, &traces, &blast_radius, true, false);
+        let report = render_pod_report(
+            &pod,
+            &diagnoses,
+            &traces,
+            &blast_radius,
+            &[],
+            &[],
+            true,
+            false,
+        );
         let expected = include_str!("../tests/fixtures/diagnosis_report.golden.txt");
         assert_eq!(report, expected);
     }

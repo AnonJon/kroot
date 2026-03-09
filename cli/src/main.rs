@@ -59,6 +59,8 @@ struct PodDiagnosisOutput {
     diagnoses: Vec<types::Diagnosis>,
     dependency_traces: Vec<engine::DependencyTrace>,
     blast_radius: Vec<engine::BlastRadiusImpact>,
+    incident_narratives: Vec<engine::IncidentNarrative>,
+    fix_priorities: Vec<engine::FixPriority>,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +69,8 @@ struct ClusterDiagnosisOutput {
     diagnoses: Vec<types::Diagnosis>,
     dependency_traces: Vec<engine::DependencyTrace>,
     blast_radius: Vec<engine::BlastRadiusImpact>,
+    incident_narratives: Vec<engine::IncidentNarrative>,
+    fix_priorities: Vec<engine::FixPriority>,
 }
 
 #[derive(Debug, Serialize)]
@@ -233,6 +237,8 @@ async fn diagnose_pod(
             run.diagnoses,
             run.dependency_traces,
             run.blast_radius,
+            run.incident_narratives,
+            run.fix_priorities,
             show_fixes,
             show_commands,
         ),
@@ -244,6 +250,8 @@ async fn diagnose_pod(
                 diagnoses,
                 dependency_traces: run.dependency_traces,
                 blast_radius: run.blast_radius,
+                incident_narratives: run.incident_narratives,
+                fix_priorities: run.fix_priorities,
             };
             println!("{}", serde_json::to_string_pretty(&payload)?);
         }
@@ -298,6 +306,8 @@ async fn diagnose_cluster(
             run.diagnoses,
             run.dependency_traces,
             run.blast_radius,
+            run.incident_narratives,
+            run.fix_priorities,
             show_fixes,
             show_commands,
         ),
@@ -308,6 +318,8 @@ async fn diagnose_cluster(
                 diagnoses,
                 dependency_traces: run.dependency_traces,
                 blast_radius: run.blast_radius,
+                incident_narratives: run.incident_narratives,
+                fix_priorities: run.fix_priorities,
             };
             println!("{}", serde_json::to_string_pretty(&payload)?);
         }

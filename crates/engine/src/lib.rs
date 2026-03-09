@@ -29,10 +29,35 @@ pub struct BlastRadiusImpact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncidentNarrative {
+    pub root_cause: String,
+    pub root_cause_detail: String,
+    pub confidence: f32,
+    pub impact_score: f32,
+    pub failure_chain: Vec<String>,
+    pub affected_resources: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FixPriority {
+    pub rank: usize,
+    pub resource: String,
+    pub diagnosis: String,
+    pub confidence: f32,
+    pub impact_score: f32,
+    pub restores: Vec<String>,
+    pub summary: String,
+    pub steps: Vec<String>,
+    pub commands: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosisRun {
     pub diagnoses: Vec<Diagnosis>,
     pub dependency_traces: Vec<DependencyTrace>,
     pub blast_radius: Vec<BlastRadiusImpact>,
+    pub incident_narratives: Vec<IncidentNarrative>,
+    pub fix_priorities: Vec<FixPriority>,
 }
 
 impl Engine {
@@ -79,11 +104,16 @@ impl Engine {
             }
         };
         let blast_radius = compute_blast_radius(&graph, &dependency_traces, &diagnoses);
+        let incident_narratives =
+            build_incident_narratives(&graph, &dependency_traces, &blast_radius, &diagnoses);
+        let fix_priorities = build_fix_priorities(&diagnoses, &blast_radius);
 
         DiagnosisRun {
             diagnoses,
             dependency_traces,
             blast_radius,
+            incident_narratives,
+            fix_priorities,
         }
     }
 }
@@ -338,6 +368,326 @@ pub fn compute_blast_radius(
         impact.rank = idx + 1;
     }
     impacts
+}
+
+fn build_incident_narratives(
+    graph: &DependencyGraph,
+    traces: &[DependencyTrace],
+    blast_radius: &[BlastRadiusImpact],
+    diagnoses: &[Diagnosis],
+) -> Vec<IncidentNarrative> {
+    let mut trace_by_root = BTreeMap::<ResourceId, DependencyTrace>::new();
+    for diagnosis in diagnoses {
+        for evidence in &diagnosis.evidence {
+            if !evidence.contains("->") {
+                continue;
+            }
+            let chain = evidence
+                .split("->")
+                .map(|part| part.trim())
+                .filter(|part| !part.is_empty())
+                .map(|part| {
+                    if part.contains('/') {
+                        part.split_whitespace()
+                            .next()
+                            .unwrap_or(part)
+                            .trim_matches(|c: char| ",;()[]{}".contains(c))
+                            .to_string()
+                    } else {
+                        part.to_string()
+                    }
+                })
+                .collect::<Vec<_>>();
+            if chain.len() < 2 {
+                continue;
+            }
+            let Some(root) = parse_resource_label(&chain[chain.len() - 2]) else {
+                continue;
+            };
+            let trace = DependencyTrace {
+                chain,
+                confidence: diagnosis.confidence,
+            };
+            match trace_by_root.get_mut(&root) {
+                Some(existing) => {
+                    if trace.confidence > existing.confidence {
+                        *existing = trace;
+                    }
+                }
+                None => {
+                    trace_by_root.insert(root, trace);
+                }
+            }
+        }
+    }
+
+    for trace in traces {
+        if trace.chain.len() < 2 {
+            continue;
+        }
+        let Some(root) = parse_resource_label(&trace.chain[trace.chain.len() - 2]) else {
+            continue;
+        };
+        match trace_by_root.get_mut(&root) {
+            Some(existing) => {
+                if trace.confidence > existing.confidence {
+                    *existing = trace.clone();
+                }
+            }
+            None => {
+                trace_by_root.insert(root, trace.clone());
+            }
+        }
+    }
+
+    let mut narratives = Vec::new();
+    for impact in blast_radius {
+        let root_resource = parse_resource_label(&impact.broken_resource);
+        let trace = root_resource
+            .as_ref()
+            .and_then(|root| trace_by_root.get(root))
+            .cloned();
+
+        let mut affected = BTreeSet::new();
+        affected.extend(impact.impacted_pods.iter().cloned());
+        affected.extend(impact.impacted_services.iter().cloned());
+        affected.extend(impact.impacted_deployments.iter().cloned());
+        affected.extend(impact.impacted_ingresses.iter().cloned());
+
+        if affected.is_empty() {
+            if let Some(root) = root_resource.as_ref() {
+                for resource in traverse_impacted_resources_for_root(graph, root) {
+                    affected.insert(resource_label(&resource));
+                }
+            }
+        }
+
+        let failure_chain = if let Some(trace) = trace.as_ref() {
+            trace.chain.clone()
+        } else {
+            vec![
+                impact.broken_resource.clone(),
+                "Upstream dependency failure inferred from dependency graph".to_string(),
+            ]
+        };
+        let root_cause_detail = trace
+            .as_ref()
+            .and_then(|trace| trace.chain.last().cloned())
+            .unwrap_or_else(|| "No explicit upstream edge available".to_string());
+        let trace_confidence = trace
+            .as_ref()
+            .map(|trace| trace.confidence)
+            .unwrap_or(impact.confidence);
+
+        narratives.push(IncidentNarrative {
+            root_cause: impact.broken_resource.clone(),
+            root_cause_detail,
+            confidence: impact.confidence.max(trace_confidence),
+            impact_score: impact.impact_score,
+            failure_chain,
+            affected_resources: affected.into_iter().collect(),
+        });
+    }
+
+    if narratives.is_empty() && !trace_by_root.is_empty() {
+        for (root, trace) in trace_by_root {
+            narratives.push(IncidentNarrative {
+                root_cause: resource_label(&root),
+                root_cause_detail: trace
+                    .chain
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| "Upstream dependency failure detected".to_string()),
+                confidence: trace.confidence,
+                impact_score: 0.0,
+                failure_chain: trace.chain,
+                affected_resources: Vec::new(),
+            });
+        }
+    }
+
+    narratives.sort_by(|a, b| {
+        b.impact_score
+            .total_cmp(&a.impact_score)
+            .then_with(|| b.confidence.total_cmp(&a.confidence))
+            .then_with(|| a.root_cause.cmp(&b.root_cause))
+    });
+    narratives
+}
+
+fn build_fix_priorities(
+    diagnoses: &[Diagnosis],
+    blast_radius: &[BlastRadiusImpact],
+) -> Vec<FixPriority> {
+    let diagnosis_anchors = diagnoses
+        .iter()
+        .map(|diagnosis| (diagnosis, diagnosis_anchor_resources(diagnosis)))
+        .collect::<Vec<_>>();
+
+    let mut priorities = blast_radius
+        .iter()
+        .map(|impact| {
+            let broken = parse_resource_label(&impact.broken_resource);
+            let best_diagnosis = diagnosis_anchors
+                .iter()
+                .filter_map(|(diagnosis, anchors)| {
+                    let matches = if let Some(broken) = broken.as_ref() {
+                        anchors.contains(broken)
+                    } else {
+                        diagnosis.resource == impact.broken_resource
+                    };
+                    if matches { Some(*diagnosis) } else { None }
+                })
+                .max_by(|a, b| {
+                    severity_weight(a.severity)
+                        .total_cmp(&severity_weight(b.severity))
+                        .then_with(|| a.confidence.total_cmp(&b.confidence))
+                        .then_with(|| b.evidence.len().cmp(&a.evidence.len()))
+                });
+
+            let mut restores = BTreeSet::new();
+            restores.extend(impact.impacted_pods.iter().cloned());
+            restores.extend(impact.impacted_services.iter().cloned());
+            restores.extend(impact.impacted_deployments.iter().cloned());
+            restores.extend(impact.impacted_ingresses.iter().cloned());
+
+            let (summary, steps, commands) = if let Some(remediation) =
+                best_diagnosis.and_then(|diagnosis| diagnosis.remediation.clone())
+            {
+                (remediation.summary, remediation.steps, remediation.commands)
+            } else {
+                default_fix_guidance(&impact.broken_resource, restores.is_empty())
+            };
+
+            FixPriority {
+                rank: 0,
+                resource: impact.broken_resource.clone(),
+                diagnosis: best_diagnosis
+                    .map(|diagnosis| diagnosis.message.clone())
+                    .unwrap_or_else(|| "Upstream dependency failure".to_string()),
+                confidence: impact.confidence.max(
+                    best_diagnosis
+                        .map(|diagnosis| diagnosis.confidence)
+                        .unwrap_or(0.0),
+                ),
+                impact_score: impact.impact_score,
+                restores: restores.into_iter().collect(),
+                summary,
+                steps,
+                commands,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    priorities.sort_by(|a, b| {
+        b.impact_score
+            .total_cmp(&a.impact_score)
+            .then_with(|| b.confidence.total_cmp(&a.confidence))
+            .then_with(|| a.resource.cmp(&b.resource))
+    });
+    for (idx, priority) in priorities.iter_mut().enumerate() {
+        priority.rank = idx + 1;
+    }
+    priorities
+}
+
+fn default_fix_guidance(
+    resource: &str,
+    no_known_restores: bool,
+) -> (String, Vec<String>, Vec<String>) {
+    let generic_summary = if no_known_restores {
+        format!("Investigate and resolve failure on {resource}")
+    } else {
+        format!("Resolve {resource} first to restore dependent resources")
+    };
+    let generic_steps = vec![
+        "Inspect resource status and related events".to_string(),
+        "Apply the minimal configuration or dependency fix".to_string(),
+        "Re-run diagnosis and validate service recovery".to_string(),
+    ];
+
+    let Some(resource_id) = parse_resource_label(resource) else {
+        return (generic_summary, generic_steps, Vec::new());
+    };
+
+    match resource_id.kind {
+        ResourceKind::Secret => (
+            "Create or restore the referenced Secret".to_string(),
+            vec![
+                "Confirm secret name/namespace referenced by workloads".to_string(),
+                "Create or update the missing secret values".to_string(),
+                "Restart impacted workloads if needed".to_string(),
+            ],
+            vec![
+                "kubectl get secret <name> -n <namespace>".to_string(),
+                "kubectl create secret generic <name> -n <namespace> --from-literal=<key>=<value>"
+                    .to_string(),
+            ],
+        ),
+        ResourceKind::ConfigMap => (
+            "Create or update the missing ConfigMap".to_string(),
+            vec![
+                "Validate configmap references in workload spec".to_string(),
+                "Create or patch the configmap with required keys".to_string(),
+                "Roll out workloads to pick up new config".to_string(),
+            ],
+            vec![
+                "kubectl get configmap <name> -n <namespace>".to_string(),
+                "kubectl apply -f <configmap.yaml>".to_string(),
+            ],
+        ),
+        ResourceKind::PersistentVolumeClaim
+        | ResourceKind::PersistentVolume
+        | ResourceKind::StorageClass => (
+            "Repair storage dependency chain".to_string(),
+            vec![
+                "Verify PVC/PV binding and storage class availability".to_string(),
+                "Correct storage class or volume configuration mismatch".to_string(),
+                "Confirm pod mounts succeed after reconciliation".to_string(),
+            ],
+            vec![
+                "kubectl get pvc,pv,storageclass -A".to_string(),
+                "kubectl describe pvc <name> -n <namespace>".to_string(),
+            ],
+        ),
+        ResourceKind::NetworkPolicy => (
+            "Adjust NetworkPolicy to allow required traffic".to_string(),
+            vec![
+                "Identify denied peer and port combinations from evidence".to_string(),
+                "Update ingress/egress rules for required flows".to_string(),
+                "Re-test pod-to-service connectivity".to_string(),
+            ],
+            vec![
+                "kubectl get networkpolicy -A".to_string(),
+                "kubectl describe networkpolicy <name> -n <namespace>".to_string(),
+            ],
+        ),
+        ResourceKind::Service => (
+            "Align Service selectors or endpoints".to_string(),
+            vec![
+                "Compare service selectors against pod labels".to_string(),
+                "Update selector or workload labels to match".to_string(),
+                "Confirm endpoints are populated".to_string(),
+            ],
+            vec![
+                "kubectl get svc <name> -n <namespace> -o yaml".to_string(),
+                "kubectl get endpoints <name> -n <namespace>".to_string(),
+            ],
+        ),
+        ResourceKind::Node => (
+            "Recover node readiness".to_string(),
+            vec![
+                "Inspect node conditions and kubelet health".to_string(),
+                "Resolve resource pressure or connectivity issues".to_string(),
+                "Re-schedule or evict impacted workloads if required".to_string(),
+            ],
+            vec![
+                "kubectl describe node <node>".to_string(),
+                "kubectl get pods -A -o wide --field-selector spec.nodeName=<node>".to_string(),
+            ],
+        ),
+        _ => (generic_summary, generic_steps, Vec::new()),
+    }
 }
 
 fn compute_impact_score(
@@ -1004,5 +1354,123 @@ mod tests {
                     .impacted_deployments
                     .contains(&"Deployment/prod/payments-api".to_string())
         }));
+    }
+
+    #[test]
+    fn incident_narratives_include_root_chain_and_impacted_resources() {
+        let pod = PodState {
+            name: "payments-api".to_string(),
+            namespace: "prod".to_string(),
+            phase: "Pending".to_string(),
+            restart_count: 0,
+            controller_kind: None,
+            controller_name: None,
+            node: "worker-1".to_string(),
+            pod_labels: BTreeMap::new(),
+            scheduling: PodSchedulingState {
+                unschedulable: false,
+                reason: None,
+                message: None,
+            },
+            service_selectors: vec![],
+            container_states: vec![],
+            dependencies: vec![PodDependency {
+                kind: PodDependencyKind::Secret,
+                name: "db-password".to_string(),
+                status: DependencyStatus::Missing,
+            }],
+            persistent_volume_claims: vec![],
+            ports: vec![],
+        };
+        let ctx = AnalysisContextBuilder::new().with_pods(vec![pod]).build();
+        let graph = super::build_cluster_dependency_graph(&ctx);
+        let traces = vec![super::DependencyTrace {
+            chain: vec![
+                "Pod/prod/payments-api".to_string(),
+                "Secret/prod/db-password".to_string(),
+                "Secret missing (source: pod.dependencies)".to_string(),
+            ],
+            confidence: 0.95,
+        }];
+        let blast = vec![super::BlastRadiusImpact {
+            broken_resource: "Secret/prod/db-password".to_string(),
+            rank: 1,
+            impact_score: 9.0,
+            confidence: 0.9,
+            impacted_pods: vec!["Pod/prod/payments-api".to_string()],
+            impacted_services: vec![],
+            impacted_deployments: vec![],
+            impacted_ingresses: vec![],
+        }];
+
+        let narratives = super::build_incident_narratives(&graph, &traces, &blast, &[]);
+
+        assert_eq!(narratives.len(), 1);
+        assert_eq!(narratives[0].root_cause, "Secret/prod/db-password");
+        assert!(
+            narratives[0]
+                .root_cause_detail
+                .contains("Secret missing (source: pod.dependencies)")
+        );
+        assert_eq!(
+            narratives[0].failure_chain,
+            vec![
+                "Pod/prod/payments-api".to_string(),
+                "Secret/prod/db-password".to_string(),
+                "Secret missing (source: pod.dependencies)".to_string()
+            ]
+        );
+        assert_eq!(
+            narratives[0].affected_resources,
+            vec!["Pod/prod/payments-api".to_string()]
+        );
+    }
+
+    #[test]
+    fn fix_priorities_match_upstream_root_from_diagnosis_evidence() {
+        let diagnoses = vec![Diagnosis {
+            severity: Severity::Critical,
+            confidence: 0.97,
+            resource: "Pod/prod/payments-api".to_string(),
+            message: "Missing Secret dependency detected".to_string(),
+            root_cause: "Pod failing because secret db-password does not exist".to_string(),
+            evidence: vec![
+                "Pod/prod/payments-api -> Secret/prod/db-password -> Secret missing".to_string(),
+            ],
+            remediation: Some(types::Remediation {
+                summary: "Create missing secret".to_string(),
+                steps: vec!["Create secret in prod namespace".to_string()],
+                commands: vec!["kubectl create secret generic db-password -n prod".to_string()],
+            }),
+        }];
+        let blast = vec![super::BlastRadiusImpact {
+            broken_resource: "Secret/prod/db-password".to_string(),
+            rank: 1,
+            impact_score: 12.5,
+            confidence: 0.92,
+            impacted_pods: vec!["Pod/prod/payments-api".to_string()],
+            impacted_services: vec!["Service/prod/payments".to_string()],
+            impacted_deployments: vec!["Deployment/prod/payments-api".to_string()],
+            impacted_ingresses: vec![],
+        }];
+
+        let priorities = super::build_fix_priorities(&diagnoses, &blast);
+
+        assert_eq!(priorities.len(), 1);
+        assert_eq!(priorities[0].rank, 1);
+        assert_eq!(priorities[0].resource, "Secret/prod/db-password");
+        assert_eq!(
+            priorities[0].diagnosis,
+            "Missing Secret dependency detected".to_string()
+        );
+        assert_eq!(priorities[0].summary, "Create missing secret".to_string());
+        assert_eq!(
+            priorities[0].restores,
+            vec![
+                "Deployment/prod/payments-api".to_string(),
+                "Pod/prod/payments-api".to_string(),
+                "Service/prod/payments".to_string()
+            ]
+        );
     }
 }

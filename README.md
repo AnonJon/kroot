@@ -24,9 +24,10 @@ Find root causes for Kubernetes failures using dependency-aware analysis.
 
 ## Example Output
 
-```text
-$ kroot diagnose cluster -n prod
+<details>
+<summary>Show full example output</summary>
 
+```text
 Diagnosis Report
 ----------------
 
@@ -47,13 +48,87 @@ Blast Radius:
     pods=1 services=0 deployments=1 ingresses=0
     impacted pods: Pod/prod/payments-api
     impacted deployments: Deployment/prod/payments-api
+  [#2 score=11.76 conf=0.98] Pod/prod/payments-api
+    pods=0 services=0 deployments=1 ingresses=0
+    impacted deployments: Deployment/prod/payments-api
+  [#3 score=6.30 conf=0.90] Service/prod/payments
+    pods=0 services=0 deployments=0 ingresses=1
+    impacted ingresses: Ingress/prod/payments-ingress
+  [#4 score=2.94 conf=0.98] Secret/db-password
+    pods=0 services=0 deployments=0 ingresses=0
+
+Incident Analysis:
+  [score=14.70 conf=0.98] NetworkPolicy/prod/deny-all
+    Detail: NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
+    Chain: Pod/prod/payments-api -> NetworkPolicy/prod/deny-all -> NetworkPolicy denies traffic (source: networkpolicy.egress) (egress has no matching peers/ports in context policies=[NetworkPolicy/prod/deny-all])
+    Affected: Deployment/prod/payments-api, Pod/prod/payments-api
+  [score=11.76 conf=0.98] Pod/prod/payments-api
+    Detail: NetworkPolicy/prod/deny-all
+    Chain: Pod/prod/payments-api -> NetworkPolicy/prod/deny-all
+    Affected: Deployment/prod/payments-api
+  [score=6.30 conf=0.90] Service/prod/payments
+    Detail: No explicit upstream edge available
+    Chain: Service/prod/payments -> Upstream dependency failure inferred from dependency graph
+    Affected: Ingress/prod/payments-ingress
+  [score=2.94 conf=0.98] Secret/db-password
+    Detail: Secret missing source=pod.dependencies
+    Chain: Pod/prod/payments-api -> Secret/db-password -> Secret missing source=pod.dependencies
+
+Recommended Fix Order:
+  1. NetworkPolicy/prod/deny-all [score=14.70 conf=0.98]
+    Diagnosis: Network reachability blocked by NetworkPolicy
+    Summary: Allow required peer and port combinations in NetworkPolicy
+    Restores: Deployment/prod/payments-api, Pod/prod/payments-api
+    Steps:
+      1. Identify blocked service or pod traffic paths from the evidence chain
+      2. Add explicit ingress/egress peers and required ports for expected flows
+      3. Re-test connectivity after applying policy updates
+  2. Pod/prod/payments-api [score=11.76 conf=0.98]
+    Diagnosis: Missing Secret dependency detected
+    Summary: Create the missing Secret or update pod references
+    Restores: Deployment/prod/payments-api
+    Steps:
+      1. Create the referenced secret in the same namespace as the failing pod
+      2. Ensure expected key names match the pod env/volume references
+      3. Restart workload rollout after the secret is created or corrected
+  3. Service/prod/payments [score=6.30 conf=0.90]
+    Diagnosis: Service selector mismatch detected
+    Summary: Align Service selectors with workload pod labels
+    Restores: Ingress/prod/payments-ingress
+    Steps:
+      1. Compare service selector keys/values against pod labels
+      2. Update the service selector or workload labels to match
+      3. Confirm endpoints are populated after reconciliation
+  4. Secret/db-password [score=2.94 conf=0.98]
+    Diagnosis: Missing Secret dependency detected
+    Summary: Create the missing Secret or update pod references
+    Steps:
+      1. Create the referenced secret in the same namespace as the failing pod
+      2. Ensure expected key names match the pod env/volume references
+      3. Restart workload rollout after the secret is created or corrected
 
 Suggested Fixes:
   Missing Secret dependency detected (Pod/prod/payments-api)
     Summary: Create the missing Secret or update pod references
+    Steps:
+      1. Create the referenced secret in the same namespace as the failing pod
+      2. Ensure expected key names match the pod env/volume references
+      3. Restart workload rollout after the secret is created or corrected
+  Service selector mismatch detected (Service/prod/payments)
+    Summary: Align Service selectors with workload pod labels
+    Steps:
+      1. Compare service selector keys/values against pod labels
+      2. Update the service selector or workload labels to match
+      3. Confirm endpoints are populated after reconciliation
   Network reachability blocked by NetworkPolicy (Pod/prod/payments-api)
     Summary: Allow required peer and port combinations in NetworkPolicy
+    Steps:
+      1. Identify blocked service or pod traffic paths from the evidence chain
+      2. Add explicit ingress/egress peers and required ports for expected flows
+      3. Re-test connectivity after applying policy updates
 ```
+
+</details>
 
 ## Demo
 
@@ -115,6 +190,8 @@ Example chain:
 - Upstream root-cause traversal to first broken dependency
 - NetworkPolicy reachability analysis with peer + port simulation
 - Blast-radius analysis with ranked impact scoring for pods/services/deployments/ingresses
+- Incident narrative output with causal failure chains and affected resources
+- Prioritized fix ordering based on impact score + confidence
 - Confidence scoring for diagnoses and dependency traces
 - Suggested remediation output (summary + steps, optional command snippets)
 - Text report output for humans
@@ -225,6 +302,8 @@ Human-readable diagnosis report with:
 - evidence lines
 - dependency traces
 - blast-radius impact sections
+- incident narrative sections (cause, chain, affected resources)
+- recommended fix ordering (ranked by impact/confidence)
 - suggested remediation guidance
 
 ### JSON
@@ -242,6 +321,8 @@ High-level JSON shape:
 - `diagnoses[].remediation`
 - `dependency_traces[]`
 - `blast_radius[]`
+- `incident_narratives[]`
+- `fix_priorities[]`
 
 ### SARIF
 
@@ -338,6 +419,8 @@ Current capabilities:
 - network reachability RCA for policy-blocked ingress/service/pod traffic paths
 - dependency-graph-backed root-cause traversal
 - blast-radius impact analysis
+- incident narrative generation with causal chain summaries
+- ranked fix prioritization by impact and confidence
 - remediation guidance with optional command suggestions
 - JSON output for automation
 - SARIF output for CI and tooling integrations
@@ -426,6 +509,7 @@ Workspace crates:
 - Storage coverage includes `PVC -> StorageClass` and `PVC -> PV` relation analysis, but deeper storage topology reasoning is still limited.
 - Blast-radius output currently tracks impacted `Pod`, `Service`, `Deployment`, and `Ingress` resources.
 - Blast-radius for non-dependency diagnoses relies on diagnosis resource/evidence anchoring; impact quality depends on evidence richness.
+- Fix prioritization is impact-driven and heuristic; it does not yet model change risk, maintenance windows, or SLO-aware business criticality.
 - Kubernetes API permission gaps can reduce diagnosis quality (some dependencies may become unknown).
 - Output schema is currently stable for this repo, but not yet versioned as a public API contract.
 
@@ -436,6 +520,8 @@ Next milestones:
 - Expand relation coverage (`StatefulSet/DaemonSet/Job -> Pod`, `IngressClass`, service-to-endpoint slice details).
 - Expand blast-radius rollups (`StatefulSet`, `DaemonSet`, `Job`, and `Node` impact views).
 - Extend reachability simulation with EndpointSlice-aware destination modeling and richer multi-rule policy conflict explanation.
+- Improve incident narrative quality with multi-hop correlation across simultaneous faults.
+- Extend fix prioritization with optional risk/business-weight inputs for smarter ordering.
 - Version and document structured output schemas (JSON/SARIF) for external integrations.
 - Add package-manager distribution (`homebrew`, `scoop`, `apt`/`rpm`).
 
