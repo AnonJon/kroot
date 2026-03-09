@@ -19,15 +19,15 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive_ext: tar.gz
-            binary_name: kdocter
+            binary_name: kroot
           - os: macos-latest
             target: aarch64-apple-darwin
             archive_ext: tar.gz
-            binary_name: kdocter
+            binary_name: kroot
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive_ext: zip
-            binary_name: kdocter.exe
+            binary_name: kroot.exe
 
     steps:
       - name: Checkout
@@ -39,14 +39,14 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build -p kdocter --release --target ${{ matrix.target }}
+        run: cargo build -p kroot --release --target ${{ matrix.target }}
 
       - name: Package archive (unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/
-          tar -C dist -czf kdocter-${{ github.ref_name }}-${{ matrix.target }}.tar.gz ${{ matrix.binary_name }}
+          tar -C dist -czf kroot-${{ github.ref_name }}-${{ matrix.target }}.tar.gz ${{ matrix.binary_name }}
 
       - name: Package archive (windows)
         if: runner.os == 'Windows'
@@ -54,15 +54,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/${{ matrix.binary_name }}"
-          Compress-Archive -Path "dist/${{ matrix.binary_name }}" -DestinationPath "kdocter-${{ github.ref_name }}-${{ matrix.target }}.zip"
+          Compress-Archive -Path "dist/${{ matrix.binary_name }}" -DestinationPath "kroot-${{ github.ref_name }}-${{ matrix.target }}.zip"
 
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kdocter-${{ matrix.target }}
+          name: kroot-${{ matrix.target }}
           path: |
-            kdocter-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
-            kdocter-${{ github.ref_name }}-${{ matrix.target }}.zip
+            kroot-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            kroot-${{ github.ref_name }}-${{ matrix.target }}.zip
 
   publish:
     name: Publish GitHub Release

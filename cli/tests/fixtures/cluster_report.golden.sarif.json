@@ -5,8 +5,8 @@
     {
       "tool": {
         "driver": {
-          "name": "kdocter",
-          "information_uri": "https://github.com/AnonJon/kdocter",
+          "name": "kroot",
+          "information_uri": "https://github.com/AnonJon/kroot",
           "rules": [
             {
               "id": "missing_secret_dependency_detected",

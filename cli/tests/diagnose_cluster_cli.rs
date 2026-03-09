@@ -14,7 +14,7 @@ fn diagnose_cluster_text_matches_golden() {
     let expected = std::fs::read_to_string(fixture_path("cluster_report.golden.txt"))
         .expect("golden fixture should exist");
 
-    let output = cargo_bin_cmd!("kdocter")
+    let output = cargo_bin_cmd!("kroot")
         .args([
             "diagnose",
             "cluster",
@@ -37,7 +37,7 @@ fn diagnose_cluster_json_matches_golden() {
     let expected = std::fs::read_to_string(fixture_path("cluster_report.golden.json"))
         .expect("json golden fixture should exist");
 
-    let output = cargo_bin_cmd!("kdocter")
+    let output = cargo_bin_cmd!("kroot")
         .args([
             "diagnose",
             "cluster",
@@ -62,7 +62,7 @@ fn diagnose_cluster_sarif_matches_golden() {
     let expected = std::fs::read_to_string(fixture_path("cluster_report.golden.sarif.json"))
         .expect("sarif golden fixture should exist");
 
-    let output = cargo_bin_cmd!("kdocter")
+    let output = cargo_bin_cmd!("kroot")
         .args([
             "diagnose",
             "cluster",

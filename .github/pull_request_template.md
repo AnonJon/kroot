@@ -25,7 +25,7 @@ cargo test --workspace
 If relevant, include sample CLI commands and output:
 
 ```bash
-cargo run -p kdocter -- diagnose cluster
+cargo run -p kroot -- diagnose cluster
 ```
 
 ## Checklist

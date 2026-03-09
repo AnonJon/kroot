@@ -1,12 +1,12 @@
-# Contributing to kdocter
+# Contributing to kroot
 
-Thanks for contributing to kdocter.
+Thanks for contributing to kroot.
 
 ## Development setup
 
 ```bash
-git clone https://github.com/AnonJon/kdocter
-cd kdocter
+git clone https://github.com/AnonJon/kroot
+cd kroot
 cargo build --workspace
 ```
 

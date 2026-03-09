@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug in kdocter
+about: Report a bug in kroot
 title: "[bug] "
 labels: bug
 assignees: ""
@@ -18,7 +18,7 @@ A clear and concise description of what happened.
 ## Command run
 
 ```bash
-kdocter diagnose cluster
+kroot diagnose cluster
 ```
 
 ## Expected behavior

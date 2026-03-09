@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "kdocter", about = "Kubernetes root cause analysis CLI")]
+#[command(name = "kroot", about = "Kubernetes root cause analysis CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -331,8 +331,8 @@ fn build_sarif_log(diagnoses: &[types::Diagnosis]) -> SarifLog {
         runs: vec![SarifRun {
             tool: SarifTool {
                 driver: SarifDriver {
-                    name: "kdocter".to_string(),
-                    information_uri: "https://github.com/AnonJon/kdocter".to_string(),
+                    name: "kroot".to_string(),
+                    information_uri: "https://github.com/AnonJon/kroot".to_string(),
                     rules: rules.into_values().collect(),
                 },
             },

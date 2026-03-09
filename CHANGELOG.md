@@ -8,9 +8,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Initial `kdocter` CLI:
-  - `kdocter diagnose cluster`
-  - `kdocter diagnose pod <name>`
+- Initial `kroot` CLI:
+  - `kroot diagnose cluster`
+  - `kroot diagnose pod <name>`
 - Namespace controls: `-n/--namespace`, `-A/--all-namespaces`
 - Output formats: `text`, `json`, `sarif`
 - Offline analysis via `--context-file`

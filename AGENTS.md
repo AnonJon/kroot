@@ -1,6 +1,6 @@
-# kdocter
+# kroot
 
-kdocter is a CLI tool for performing root cause analysis (RCA)
+kroot is a CLI tool for performing root cause analysis (RCA)
 on Kubernetes clusters.
 
 The tool diagnoses failures like:

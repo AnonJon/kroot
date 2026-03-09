@@ -1,46 +1,46 @@
-![CI](https://github.com/AnonJon/kdocter/actions/workflows/ci.yml/badge.svg)
-![Release](https://img.shields.io/github/v/release/AnonJon/kdocter)
+![CI](https://github.com/AnonJon/kroot/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/AnonJon/kroot)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![Kubernetes](https://img.shields.io/badge/kubernetes-compatible-blue)
 
-# kdocter
+# kroot
 
 Root cause analysis for Kubernetes incidents.
 
-`kdocter` is a Rust CLI that analyzes Kubernetes resources,
+`kroot` is a Rust CLI that analyzes Kubernetes resources,
 builds dependency graphs, and explains _why failures occur_.
 
-Instead of only detecting symptoms, `kdocter` builds a dependency graph
+Instead of only detecting symptoms, `kroot` builds a dependency graph
 and traces resource relationships to explain root causes.
 
 ## TL;DR
 
 ```bash
-kdocter diagnose cluster -A
+kroot diagnose cluster -A
 ```
 
 Find root causes for Kubernetes failures using dependency-aware analysis.
 
-## How kdocter Works
+## How kroot Works
 
-`kdocter` analyzes a cluster in three stages:
+`kroot` analyzes a cluster in three stages:
 
 1. Collect Kubernetes resources (pods, services, secrets, and related objects).
 2. Build a dependency graph between resources.
 3. Run analyzers that detect failure patterns and trace root causes.
 
-This allows `kdocter` to report not just failing resources, but the dependency chains that explain the failure.
+This allows `kroot` to report not just failing resources, but the dependency chains that explain the failure.
 
 ## Contents
 
 - [TL;DR](#tldr)
-- [How kdocter Works](#how-kdocter-works)
-- [Why kdocter](#why-kdocter)
+- [How kroot Works](#how-kroot-works)
+- [Why kroot](#why-kroot)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [When to Use kdocter](#when-to-use-kdocter)
+- [When to Use kroot](#when-to-use-kroot)
 - [Example Output](#example-output)
 - [Command Reference](#command-reference)
 - [Output Formats](#output-formats)
@@ -58,10 +58,10 @@ This allows `kdocter` to report not just failing resources, but the dependency c
 - [Contributing](#contributing)
 - [License](#license)
 
-## Why kdocter
+## Why kroot
 
 Most Kubernetes tooling tells you _what failed_.
-`kdocter` is designed to explain _why it failed_ by correlating resources and their relationships.
+`kroot` is designed to explain _why it failed_ by correlating resources and their relationships.
 
 Example chain:
 
@@ -87,8 +87,8 @@ Example chain:
 ### Build and run locally
 
 ```bash
-git clone https://github.com/AnonJon/kdocter
-cd kdocter
+git clone https://github.com/AnonJon/kroot
+cd kroot
 cargo build --workspace
 ```
 
@@ -101,13 +101,13 @@ cargo install --path cli
 ### Install from source repository (single command)
 
 ```bash
-cargo install --git https://github.com/AnonJon/kdocter --bin kdocter
+cargo install --git https://github.com/AnonJon/kroot --bin kroot
 ```
 
 Then run:
 
 ```bash
-kdocter --help
+kroot --help
 ```
 
 ## Quick Start
@@ -115,18 +115,18 @@ kdocter --help
 Diagnose current namespace from your active kubeconfig context:
 
 ```bash
-cargo run -p kdocter -- diagnose cluster
+cargo run -p kroot -- diagnose cluster
 ```
 
 Diagnose a specific pod:
 
 ```bash
-cargo run -p kdocter -- diagnose pod payments-api -n prod
+cargo run -p kroot -- diagnose pod payments-api -n prod
 ```
 
-## When to Use kdocter
+## When to Use kroot
 
-`kdocter` is useful when:
+`kroot` is useful when:
 
 - a pod is failing but the root cause is unclear
 - service traffic suddenly stops working
@@ -135,14 +135,14 @@ cargo run -p kdocter -- diagnose pod payments-api -n prod
 
 Typical workflow:
 
-1. Run `kdocter diagnose cluster`.
+1. Run `kroot diagnose cluster`.
 2. Inspect dependency traces.
 3. Identify the upstream failing resource.
 
 ## Example Output
 
 ```text
-$ kdocter diagnose cluster -n prod
+$ kroot diagnose cluster -n prod
 
 Diagnosis Report
 ----------------
@@ -168,13 +168,13 @@ Dependency Traces:
 ### Diagnose cluster
 
 ```bash
-kdocter diagnose cluster [-n <namespace> | -A] [--output text|json|sarif] [--context-file <path>]
+kroot diagnose cluster [-n <namespace> | -A] [--output text|json|sarif] [--context-file <path>]
 ```
 
 ### Diagnose pod
 
 ```bash
-kdocter diagnose pod <name> [-n <namespace>] [--output text|json|sarif] [--context-file <path>]
+kroot diagnose pod <name> [-n <namespace>] [--output text|json|sarif] [--context-file <path>]
 ```
 
 ### Notes
@@ -199,7 +199,7 @@ Human-readable diagnosis report with:
 Machine-readable output for scripting:
 
 ```bash
-kdocter diagnose cluster --output json -n prod
+kroot diagnose cluster --output json -n prod
 ```
 
 High-level JSON shape:
@@ -213,7 +213,7 @@ High-level JSON shape:
 SARIF output is useful for CI systems and security/dev tooling pipelines:
 
 ```bash
-kdocter diagnose cluster --output sarif -A > kdocter.sarif.json
+kroot diagnose cluster --output sarif -A > kroot.sarif.json
 ```
 
 ## Release Binaries and Package Managers
@@ -221,7 +221,7 @@ kdocter diagnose cluster --output sarif -A > kdocter.sarif.json
 Release binaries are published on tagged releases (`v*`) through:
 
 - [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-- [Latest release](https://github.com/AnonJon/kdocter/releases/latest)
+- [Latest release](https://github.com/AnonJon/kroot/releases/latest)
 
 Available now:
 
@@ -237,7 +237,7 @@ Planned install paths:
 Run analysis against a previously captured context:
 
 ```bash
-kdocter diagnose cluster --context-file ./context.json
+kroot diagnose cluster --context-file ./context.json
 ```
 
 Example context fixture:
@@ -283,7 +283,7 @@ kubectl get events -n prod
 
 This surfaces symptoms, but usually not the full dependency cause chain.
 
-`kdocter` correlates dependencies directly:
+`kroot` correlates dependencies directly:
 
 `Pod/prod/payments-api -> Secret/prod/db-password -> Secret missing`
 
@@ -291,7 +291,7 @@ That gives a direct root-cause path instead of disconnected clues.
 
 ## Project Status
 
-`kdocter` is early-stage but functional for real diagnostics.
+`kroot` is early-stage but functional for real diagnostics.
 
 First public release: `v0.1.0` (March 8, 2026).
 
@@ -307,7 +307,7 @@ Expect active iteration as graph coverage and reasoning depth expand.
 
 ## Similar Tools
 
-`kdocter` focuses on dependency-aware root cause analysis.
+`kroot` focuses on dependency-aware root cause analysis.
 
 Related tools:
 
@@ -315,11 +315,11 @@ Related tools:
 - `kube-score` (manifest/static analysis)
 - `kubectl` (manual troubleshooting)
 
-`kdocter` complements these by correlating runtime relationships between resources.
+`kroot` complements these by correlating runtime relationships between resources.
 
 ## Kubernetes Permissions (RBAC)
 
-`kdocter` collects and correlates multiple resource types. Your identity should allow at least:
+`kroot` collects and correlates multiple resource types. Your identity should allow at least:
 
 - `get/list` on `pods`
 - `get/list` on `services`
@@ -362,7 +362,7 @@ DependencyGraph
 
 Workspace crates:
 
-- `cli`: binary crate (`kdocter`)
+- `cli`: binary crate (`kroot`)
 - `crates/cluster`: Kubernetes collectors and context loading
 - `crates/types`: normalized domain models
 - `crates/graph`: dependency graph builder/model (`petgraph`)
